@@ -90,4 +90,14 @@ export KBUILD_LDFLAGS="--gc-sections --icf=all"
 # Eksekusi Build Image
 make -C $KERNEL_ROOT O=$KERNEL_ROOT/out -j$(nproc) ARCH=$ARCH CC=$CC CROSS_COMPILE=$CROSS_COMPILE LD=ld.lld AR=llvm-ar NM=llvm-nm \
     KCFLAGS="$KCFLAGS" KBUILD_LDFLAGS="$KBUILD_LDFLAGS" Image
+    
+# ==========================================
+# TAHAP ARTIFACTS: Pengumpulan Hasil Jadi
+# ==========================================
+echo "[+] Mengumpulkan hasil eksport..."
+mkdir -p $GITHUB_WORKSPACE/output_artifacts
 
+# Ambil Image kernel
+if [ -f "$KERNEL_ROOT/out/arch/arm64/boot/Image" ]; then
+  cp $KERNEL_ROOT/out/arch/arm64/boot/Image $GITHUB_WORKSPACE/output_artifacts/
+fi
