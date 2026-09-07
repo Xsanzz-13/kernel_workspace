@@ -1,1 +1,69 @@
+name: Build DTBS
 
+on:
+  workflow_dispatch:
+
+jobs:
+  build-dtbs:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Source Kernel
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            bc \
+            bison \
+            flex \
+            libssl-dev \
+            libelf-dev \
+            python3-minimal \
+            python2 \
+            git \
+            cpio \
+            gcc-aarch64-linux-gnu \
+            libncurses-dev \
+            libyaml-dev \
+            device-tree-compiler
+
+      - name: Setup Repository Toolchain
+        run: |
+          echo "${{ github.workspace }}/toolchain/clang-r383902/bin" >> "$GITHUB_PATH"
+          echo "${{ github.workspace }}/toolchain/aarch64-linux-android-4.9/bin" >> "$GITHUB_PATH"
+
+      - name: Check Toolchain
+        run: |
+          clang --version
+          aarch64-linux-android-gcc --version
+
+      - name: Build DTBS
+        run: |
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export CROSS_COMPILE=aarch64-linux-android-
+
+          mkdir -p out
+
+          make O=out \
+            ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-android- \
+            dtbs
+
+      - name: Collect DTBS
+        run: |
+          mkdir -p output_artifacts
+          find out/arch/arm64/boot/dts -type f -name "*.dtb" \
+            -exec cp {} output_artifacts/ \;
+
+      - name: Upload DTBS
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-DTBS
+          path: output_artifacts/*
