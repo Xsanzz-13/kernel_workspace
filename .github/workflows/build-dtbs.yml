@@ -70,18 +70,46 @@ jobs:
             BSP_BUILD_DT_OVERLAY=y \
             a3core_eur_open_defconfig
 
-      - name: Build DTBS
+           - name: Patch DTC libyaml
+       run: |
+          echo "===== BEFORE ====="
+          grep -n -E 'HOSTLDLIBS_dtc|yamltree|yaml' scripts/dtc/Makefile || true
+
+          printf '\nHOSTLDLIBS_dtc += -lyaml\n' >> scripts/dtc/Makefile
+
+          echo "===== AFTER ====="
+          tail -20 scripts/dtc/Makefile
+
+            - name: Build DTBS
         run: |
+          echo "===== YAML CHECK ====="
+          pkg-config --exists yaml-0.1
+          echo "yaml version:"
+          pkg-config --modversion yaml-0.1
+          echo "yaml cflags:"
+          pkg-config --cflags yaml-0.1
+          echo "yaml libs:"
+          pkg-config --libs yaml-0.1
+
+          echo "===== LIBYAML CHECK ====="
+          ldconfig -p | grep yaml || true
+          nm -D /usr/lib/x86_64-linux-gnu/libyaml-0.so.2 | grep yaml_emitter_emit || true
+
+          echo "===== DTC MAKEFILE ====="
+          grep -n -E 'yaml|HOSTLDLIBS_dtc|yamltree' scripts/dtc/Makefile || true
+
+          echo "===== CLEAN OLD DTC ====="
           rm -rf out/scripts/dtc
 
-          make -j2 O=out \
+          echo "===== BUILD DTBS ====="
+          make -j2 V=1 O=out \
             ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LD=ld.lld \
             BSP_BUILD_DT_OVERLAY=y \
-            HOSTLDLIBS_dtc="$(pkg-config --libs yaml-0.1)" \
+            HOSTLDLIBS_dtc=-lyaml \
             dtbs
 
       - name: Collect DTBS
