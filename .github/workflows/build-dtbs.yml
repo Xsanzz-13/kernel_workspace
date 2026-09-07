@@ -124,26 +124,41 @@ jobs:
         run: |
           set -e
 
-          echo "===== libc++ TARGET ====="
-          readlink -f /lib/x86_64-linux-gnu/libc++.so
-          file "$(readlink -f /lib/x86_64-linux-gnu/libc++.so)"
+          mkdir -p "${GITHUB_WORKSPACE}/tools/mkdtimg/lib"
 
-          echo "===== BINARY ====="
-          file tools/mkdtimg/ufdt_verify_overlay_host
+          echo "===== SYSTEM libc++.so ====="
+          ls -lh /usr/lib/llvm-14/lib/libc++.so
+          file /usr/lib/llvm-14/lib/libc++.so
 
-          echo "===== ELF NEEDED ====="
-          readelf -d tools/mkdtimg/ufdt_verify_overlay_host | grep NEEDED || true
+          echo "===== REAL libc++ RUNTIME ====="
+          ls -lh /usr/lib/llvm-14/lib/libc++.so.1.0
+          file /usr/lib/llvm-14/lib/libc++.so.1.0
 
-          echo "===== LLVM LIBS ====="
-          ls -lh /usr/lib/llvm-14/lib/libc++.so*
-          ls -lh /usr/lib/llvm-14/lib/libc++abi.so*
+          echo "===== INSTALL LOCAL RUNTIME ====="
+          cp -L \
+            /usr/lib/llvm-14/lib/libc++.so.1.0 \
+            "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/libc++.so"
 
-          echo "===== TEST WITH LLVM LIBRARY ====="
-          LD_LIBRARY_PATH=/usr/lib/llvm-14/lib \
-            tools/mkdtimg/ufdt_verify_overlay_host --help || true
+          cp -L \
+            /usr/lib/llvm-14/lib/libc++abi.so.1.0 \
+            "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/libc++abi.so.1"
+
+          chmod 755 "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/libc++.so"
+          chmod 755 "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/libc++abi.so.1"
+
+          echo "===== LOCAL LIBRARIES ====="
+          ls -lh "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/"
+          file "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/"*
+
+          echo "===== TEST ufdt_verify_overlay_host ====="
+          LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/tools/mkdtimg/lib:/usr/lib/llvm-14/lib" \
+            "${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" \
+            2>&1 || true
             
       - name: Build DTBS
         run: |
+          export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/tools/mkdtimg/lib:/usr/lib/llvm-14/lib:${LD_LIBRARY_PATH}"
+
           make -j2 V=1 O=out \
             ARCH=arm64 \
             CC=clang \
@@ -157,7 +172,6 @@ jobs:
             DTC_OVERLAY_TEST_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_apply_overlay" \
             DTC_OVERLAY_VTS_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" \
             dtbs
-
       - name: Collect DTBS
         run: |
           mkdir -p dtbs_output
