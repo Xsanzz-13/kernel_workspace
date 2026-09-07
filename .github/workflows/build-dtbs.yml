@@ -1,4 +1,4 @@
-name: Membangun DTBS
+name: Build DTBS
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout Source Kernel
+      - name: Checkout Kernel
         uses: actions/checkout@v4
 
       - name: Install Dependencies
@@ -21,20 +21,14 @@ jobs:
             flex \
             libssl-dev \
             libelf-dev \
-            ccache \
-            python3-minimal \
-            python2 \
-            git \
-            zip \
-            unzip \
-            curl \
-            wget \
-            cpio \
-            gcc-aarch64-linux-gnu \
-            libncurses-dev \
             libyaml-dev \
             pkg-config \
-            device-tree-compiler
+            device-tree-compiler \
+            python3 \
+            python2 \
+            git \
+            cpio \
+            gcc-aarch64-linux-gnu
 
       - name: Setup Toolchain
         run: |
@@ -47,61 +41,31 @@ jobs:
           echo "SUBARCH=arm64" >> "$GITHUB_ENV"
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> "$GITHUB_ENV"
           echo "CROSS_COMPILE=aarch64-linux-gnu-" >> "$GITHUB_ENV"
+
           echo "BSP_BUILD_FAMILY=sharkl3" >> "$GITHUB_ENV"
           echo "BSP_BUILD_ANDROID_OS=y" >> "$GITHUB_ENV"
           echo "BSP_BUILD_DT_OVERLAY=y" >> "$GITHUB_ENV"
+
           echo "DTC_OVERLAY_TEST_EXT=${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_apply_overlay" >> "$GITHUB_ENV"
           echo "DTC_OVERLAY_VTS_EXT=${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" >> "$GITHUB_ENV"
 
-      - name: Check Toolchain and YAML
+      - name: Check LibYAML
         run: |
-          echo "===== CLANG ====="
-          clang --version
-
-          echo "===== GCC ====="
-          aarch64-linux-gnu-gcc --version
-
           echo "===== LIBYAML ====="
-          pkg-config --modversion yaml-0.1
           pkg-config --cflags yaml-0.1
           pkg-config --libs yaml-0.1
 
-          echo "===== YAML LIBRARY ====="
-          ldconfig -p | grep libyaml || true
-
-      - name: Generate Kernel Config
+      - name: Generate Defconfig
         run: |
-          mkdir -p out
-
           make O=out \
             CC=clang \
             LD=ld.lld \
             BSP_BUILD_DT_OVERLAY=y \
             a3core_eur_open_defconfig
 
-      - name: Fix Host Linker for DTC
+      - name: Clean DTC Objects
         run: |
-          echo "===== LIBYAML ====="
-          pkg-config --cflags yaml-0.1
-          pkg-config --libs yaml-0.1
-
-          echo "===== HOSTLDFLAGS ====="
-          echo "HOSTLDFLAGS=-lyaml"
-
           rm -rf out/scripts/dtc
-
-          make O=out \
-            ARCH=arm64 \
-            CC=clang \
-            LD=ld.lld \
-            HOSTCC=gcc \
-            HOSTLDFLAGS="-lyaml" \
-            BSP_BUILD_FAMILY=sharkl3 \
-            BSP_BUILD_ANDROID_OS=y \
-            BSP_BUILD_DT_OVERLAY=y \
-            DTC_OVERLAY_TEST_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_apply_overlay" \
-            DTC_OVERLAY_VTS_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" \
-            scripts/dtc/dtc V=1
 
       - name: Build DTBS
         run: |
@@ -111,6 +75,8 @@ jobs:
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LD=ld.lld \
+            HOSTCC=gcc \
+            HOSTLDFLAGS="-lyaml" \
             BSP_BUILD_FAMILY=sharkl3 \
             BSP_BUILD_ANDROID_OS=y \
             BSP_BUILD_DT_OVERLAY=y \
@@ -120,18 +86,18 @@ jobs:
 
       - name: Collect DTBS
         run: |
-          mkdir -p output_artifacts
+          mkdir -p output_dtbs
 
           find out/arch/arm64/boot/dts \
             -type f \
-            -name "*.dtb" \
-            -exec cp {} output_artifacts/ \;
+            \( -name "*.dtb" -o -name "*.dtbo" \) \
+            -exec cp {} output_dtbs/ \;
 
-          echo "===== DTBS RESULT ====="
-          find output_artifacts -type f -name "*.dtb" -print
+          echo "===== DTBS ====="
+          find output_dtbs -type f -print
 
       - name: Upload DTBS
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-DTBS
-          path: output_artifacts/*
+          name: DTBS
+          path: output_dtbs/*
