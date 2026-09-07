@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+
 # ==========================================
 # INISIALISASI & PATH 
 # ==========================================
@@ -7,8 +8,8 @@ export KERNEL_ROOT=$GITHUB_WORKSPACE
 export TOOLCHAIN_DIR=$KERNEL_ROOT/toolchain_download
 export ARCH=arm64
 export SUBARCH=arm64
+export CC=clang
 export CLANG_TRIPLE=aarch64-linux-gnu-
-export CROSS_COMPILE=aarch64-linux-android-
 export BSP_BUILD_FAMILY=sharkl3
 export BSP_BUILD_ANDROID_OS=y
 export DEFCONFIG="a3core_eur_open_defconfig"
@@ -17,10 +18,10 @@ export DEFCONFIG="a3core_eur_open_defconfig"
 # TAHAP 3: Install Dependencies
 # ==========================================
 echo "[+] Menginstal dependencies sistem..."
-apt-get update && apt-get install -y \
+sudo apt-get update && sudo apt-get install -y \
     build-essential bc bison flex libssl-dev libelf-dev ccache \
     python3-minimal python2 git zip unzip curl wget cpio \
-    gcc-aarch64-linux-gnu libncurses-dev && apt-get clean
+    gcc-aarch64-linux-gnu libncurses-dev && sudo apt-get clean
 
 # ==========================================
 # TAHAP 1: KSU Integration
@@ -47,11 +48,10 @@ fi
 # ==========================================
 # TAHAP 4: Setup Toolchains dari Skrip
 # ==========================================
-# Skrip akan tetap mengunduh toolchain bawaannya
 mkdir -p $TOOLCHAIN_DIR/gcc-14.3 $TOOLCHAIN_DIR/clang-r383902b
 
 if [ ! -f "$TOOLCHAIN_DIR/clang-r383902b/bin/clang" ]; then
-  echo "[+] Downloading Clang ke /work/toolchain..."
+  echo "[+] Downloading Clang ke toolchain directory..."
   wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/0e9e7035bf8ad42437c6156e5950eab13655b26c/clang-r383902b.tar.gz -O /tmp/clang.tar.gz
   tar -xf /tmp/clang.tar.gz -C $TOOLCHAIN_DIR/clang-r383902b && rm /tmp/clang.tar.gz
 else
@@ -59,14 +59,14 @@ else
 fi
 
 if [ ! -f "$TOOLCHAIN_DIR/gcc-14.3/bin/aarch64-none-linux-gnu-gcc" ]; then
-  echo "[+] Downloading GCC 14.3 ke /work/toolchain..."
+  echo "[+] Downloading GCC 14.3 ke toolchain directory..."
   wget -q https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-x86_64-aarch64-none-linux-gnu.tar.xz -O /tmp/gcc.tar.xz
   tar -xf /tmp/gcc.tar.xz -C $TOOLCHAIN_DIR/gcc-14.3 --strip-components=1 && rm /tmp/gcc.tar.xz
 else
   echo "[=] GCC 14.3 sudah terunduh, melewatinya."
 fi
 
-# Mengatur PATH ke toolchain yang baru diunduh skrip
+# Mengatur PATH secara presisi ke bin toolchain baru
 export PATH="$TOOLCHAIN_DIR/clang-r383902b/bin:$TOOLCHAIN_DIR/gcc-14.3/bin:$PATH"
 export CROSS_COMPILE="$TOOLCHAIN_DIR/gcc-14.3/bin/aarch64-none-linux-gnu-"
 export CROSS_COMPILE_ARM32="$TOOLCHAIN_DIR/gcc-14.3/bin/arm-none-linux-gnueabihf-"
@@ -78,7 +78,7 @@ echo "[+] Melakukan konfigurasi kernel dengan $DEFCONFIG..."
 make -C $KERNEL_ROOT O=$KERNEL_ROOT/out ARCH=$ARCH CC=$CC LD=ld.lld $DEFCONFIG
 
 echo "[+] Memulai kompilasi Kernel Image..."
-export KBUILD_BUILD_HOST="$(. /etc/os-release && echo ${NAME}-${VERSION_ID})"
+export KBUILD_BUILD_HOST="GitHub-Actions"
 export KBUILD_BUILD_TIMESTAMP="$(date '+%a %b %d %T WIB %Y')"
 
 # Tambahan Flags Optimasi CPU (Cortex-A55) & Linker
@@ -86,8 +86,17 @@ export KCFLAGS="-march=armv8.2-a+crypto -mtune=cortex-a55"
 export KBUILD_LDFLAGS="--gc-sections --icf=all"
 
 # Eksekusi Build Image
-make -C $KERNEL_ROOT O=$KERNEL_ROOT/out -j$(nproc) ARCH=$ARCH CC=$CC CROSS_COMPILE=$CROSS_COMPILE LD=ld.lld AR=llvm-ar NM=llvm-nm \
-    KCFLAGS="$KCFLAGS" KBUILD_LDFLAGS="$KBUILD_LDFLAGS" Image
+make -C $KERNEL_ROOT O=$KERNEL_ROOT/out -j$(nproc) ARCH=$ARCH \
+    CC=$CC \
+    CROSS_COMPILE=$CROSS_COMPILE \
+    CROSS_COMPILE_ARM32=$CROSS_COMPILE_ARM32 \
+    CLANG_TRIPLE=$CLANG_TRIPLE \
+    LD=ld.lld \
+    AR=llvm-ar \
+    NM=llvm-nm \
+    KCFLAGS="$KCFLAGS" \
+    KBUILD_LDFLAGS="$KBUILD_LDFLAGS" \
+    Image
     
 # ==========================================
 # TAHAP ARTIFACTS: Pengumpulan Hasil Jadi
@@ -95,7 +104,10 @@ make -C $KERNEL_ROOT O=$KERNEL_ROOT/out -j$(nproc) ARCH=$ARCH CC=$CC CROSS_COMPI
 echo "[+] Mengumpulkan hasil eksport..."
 mkdir -p $GITHUB_WORKSPACE/output_artifacts
 
-# Ambil Image kernel
+# Ambil Image kernel jika berhasil terbentuk
 if [ -f "$KERNEL_ROOT/out/arch/arm64/boot/Image" ]; then
   cp $KERNEL_ROOT/out/arch/arm64/boot/Image $GITHUB_WORKSPACE/output_artifacts/
+  echo "[+] Berhasil menyalin Kernel Image ke folder output."
+else
+  echo "[!] Waduh, berkas Image kernel tidak ditemukan di folder out."
 fi
