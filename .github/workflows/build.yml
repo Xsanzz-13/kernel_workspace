@@ -11,6 +11,10 @@ jobs:
     - name: Checkout Source Kernel
       uses: actions/checkout@v4
 
+    - name: Ubah Default Shell ke Bash (Perbaikan Illegal Option)
+      run: |
+        sudo ln -sf /bin/bash /bin/sh
+
     - name: Install Dependencies Sistem
       run: |
         sudo apt-get update
