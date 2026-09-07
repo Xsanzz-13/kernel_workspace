@@ -95,6 +95,14 @@ jobs:
           echo "===== DTC MAKEFILE ====="
           tail -n 15 scripts/dtc/Makefile
 
+- name: Set Execute Permission
+  run: |
+    chmod +x tools/mkdtimg/ufdt_apply_overlay
+    chmod +x tools/mkdtimg/ufdt_verify_overlay_host
+
+    ls -l tools/mkdtimg/ufdt_apply_overlay
+    ls -l tools/mkdtimg/ufdt_verify_overlay_host
+
       - name: Build DTBS
         run: |
           make -j2 V=1 O=out \
