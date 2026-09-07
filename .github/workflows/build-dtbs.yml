@@ -119,7 +119,29 @@ jobs:
 
           echo "===== NEEDED LIBRARIES ====="
           ldd tools/mkdtimg/ufdt_verify_overlay_host || true
+          
+      - name: Fix libc++ Runtime
+        run: |
+          set -e
 
+          echo "===== libc++ TARGET ====="
+          readlink -f /lib/x86_64-linux-gnu/libc++.so
+          file "$(readlink -f /lib/x86_64-linux-gnu/libc++.so)"
+
+          echo "===== BINARY ====="
+          file tools/mkdtimg/ufdt_verify_overlay_host
+
+          echo "===== ELF NEEDED ====="
+          readelf -d tools/mkdtimg/ufdt_verify_overlay_host | grep NEEDED || true
+
+          echo "===== LLVM LIBS ====="
+          ls -lh /usr/lib/llvm-14/lib/libc++.so*
+          ls -lh /usr/lib/llvm-14/lib/libc++abi.so*
+
+          echo "===== TEST WITH LLVM LIBRARY ====="
+          LD_LIBRARY_PATH=/usr/lib/llvm-14/lib \
+            tools/mkdtimg/ufdt_verify_overlay_host --help || true
+            
       - name: Build DTBS
         run: |
           make -j2 V=1 O=out \
