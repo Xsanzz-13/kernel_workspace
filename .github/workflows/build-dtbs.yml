@@ -1,4 +1,4 @@
-name: Build DTBS
+name: Membangun DTBS
 
 on:
   workflow_dispatch:
@@ -8,10 +8,10 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout Source Kernel
+      - name: Periksa Sumber Kernel
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Instal Dependensi
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -30,17 +30,17 @@ jobs:
             libyaml-dev \
             device-tree-compiler
 
-      - name: Setup Repository Toolchain
+      - name: Gunakan Toolchain dari Repository
         run: |
           echo "${{ github.workspace }}/toolchain/clang-r383902/bin" >> "$GITHUB_PATH"
           echo "${{ github.workspace }}/toolchain/aarch64-linux-android-4.9/bin" >> "$GITHUB_PATH"
 
-      - name: Check Toolchain
+      - name: Periksa Toolchain
         run: |
           clang --version
           aarch64-linux-android-gcc --version
 
-            - name: Generate Kernel Config
+      - name: Hasilkan Konfigurasi Kernel
         run: |
           export ARCH=arm64
           export SUBARCH=arm64
@@ -56,7 +56,7 @@ jobs:
             CROSS_COMPILE=aarch64-linux-android- \
             a3core_eur_open_defconfig
 
-      - name: Build DTBS
+      - name: Membangun DTBS
         run: |
           export ARCH=arm64
           export SUBARCH=arm64
@@ -70,13 +70,16 @@ jobs:
             CROSS_COMPILE=aarch64-linux-android- \
             dtbs
 
-      - name: Collect DTBS
+      - name: Kumpulkan DTBS
         run: |
           mkdir -p output_artifacts
-          find out/arch/arm64/boot/dts -type f -name "*.dtb" \
+
+          find out/arch/arm64/boot/dts \
+            -type f \
+            -name "*.dtb" \
             -exec cp {} output_artifacts/ \;
 
-      - name: Upload DTBS
+      - name: Unggah DTBS
         uses: actions/upload-artifact@v4
         with:
           name: Kernel-DTBS
