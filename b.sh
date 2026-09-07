@@ -12,8 +12,6 @@ export CROSS_COMPILE=aarch64-linux-android-
 export BSP_BUILD_FAMILY=sharkl3
 export BSP_BUILD_ANDROID_OS=y
 export DEFCONFIG="a3core_eur_open_defconfig"
-# Membuat direktori kerja jika belum ada
-mkdir -p $TOOLCHAIN_DIR
 
 # ==========================================
 # TAHAP 3: Install Dependencies
