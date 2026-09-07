@@ -71,6 +71,7 @@
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 			capacity-dmips-mhz = <1024>;
+			sugov_slack_timer;
 		};
 
 		CPU2: cpu@200 {
@@ -106,7 +107,8 @@
 			cpufreq-data-v1 = <&cpufreq_clus1>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
-			capacity-dmips-mhz = <1024>;
+			capacity-dmips-mhz = <1088>;
+			sugov_slack_timer;
 		};
 
 		CPU5: cpu@500 {
@@ -118,7 +120,8 @@
 			cpufreq-data-v1 = <&cpufreq_clus1>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
-			capacity-dmips-mhz = <1024>;
+			capacity-dmips-mhz = <1088>;
+			sugov_slack_timer;
 		};
 
 		CPU6: cpu@600 {
@@ -130,7 +133,7 @@
 			cpufreq-data-v1 = <&cpufreq_clus1>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
-			capacity-dmips-mhz = <1024>;
+			capacity-dmips-mhz = <1088>;
 		};
 
 		CPU7: cpu@700 {
@@ -142,37 +145,37 @@
 			cpufreq-data-v1 = <&cpufreq_clus1>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
-			capacity-dmips-mhz = <1024>;
+			capacity-dmips-mhz = <1088>;
 		};
 	};
 
 	energy-costs {
 		CPU_COST_0: core-cost0 {
 			busy-cost-data = <
-				492	80	/* 768MHz */
-				566	101	/* 884MHz */
-				640	125	/* 1000MHz */
-				704	151	/* 1100MHz */
-				768	181	/* 1200MHz */
+				492	65	/* 768MHz */
+				566	82	/* 884MHz */
+				640	102	/* 1000MHz */
+				704	124	/* 1100MHz */
+				768	148	/* 1200MHz */
 			>;
 			idle-cost-data = <
-				25		/* ACTIVE-IDLE */
-				25		/* WFI */
+				20		/* ACTIVE-IDLE */
+				20		/* WFI */
 				0		/* CORE_PD */
 			>;
 		};
 		CPU_COST_1: core-cost1 {
 			busy-cost-data = <
-				492	110	/* 768MHz */
-				672	160	/* 1050MHz */
-				784	206	/* 1225MHz */
-				896	258	/* 1400MHz */
-				960	305	/* 1500MHz */
-				1024	352	/* 1600MHz */
+				492	88	/* 768MHz */
+				672	130	/* 1050MHz */
+				784	168	/* 1225MHz */
+				896	212	/* 1400MHz */
+				960	250	/* 1500MHz */
+				1088	310	/* 1700MHz */
 			>;
 			idle-cost-data = <
-				44		/* ACTIVE-IDLE */
-				44		/* WFI */
+				35		/* ACTIVE-IDLE */
+				35		/* WFI */
 				0		/* CORE_PD */
 			>;
 		};
@@ -192,17 +195,17 @@
 		};
 		CLUSTER_COST_1: cluster-cost1 {
 			busy-cost-data = <
-				492	68	/* 768MHz */
-				672	85	/* 1050MHz */
-				784	106	/* 1225MHz */
-				896	130	/* 1400MHz */
-				960	153	/* 1500MHz */
-			       1024	179	/* 1600MHz */
+				492	52	/* 768MHz */
+				672	68	/* 1050MHz */
+				784	85	/* 1225MHz */
+				896	105	/* 1400MHz */
+				960	123	/* 1500MHz */
+				1088	155	/* 1700MHz */
 			>;
 			idle-cost-data = <
-				42		/* ACTIVE-IDLE */
-				42		/* WFI */
-				42		/* CORE_PD */
+				32		/* ACTIVE-IDLE */
+				32		/* WFI */
+				32		/* CORE_PD */
 			>;
 		};
 	};
@@ -212,9 +215,9 @@
 		entry-method = "arm,psci";
 		CORE_PD: core_pd {
 			compatible = "arm,idle-state";
-			entry-latency-us = <1000>;
-			exit-latency-us = <500>;
-			min-residency-us = <2500>;
+			entry-latency-us = <800>;
+			exit-latency-us = <400>;
+			min-residency-us = <2000>;
 			local-timer-stop;
 			arm,psci-suspend-param = <0x00010000>;
 		};
@@ -224,7 +227,7 @@
 			cpufreq-cluster-id = <0>;
 			nvmem-cells = <&dvfs_bin_cpu0>;
 			nvmem-cell-names = "dvfs_bin";
-			sprd,cpufreq-temp-threshold = <65>;
+			sprd,cpufreq-temp-threshold = <70>;
 			clocks = <&aon_clk CLK_CORE0>,
 				<&aon_clk CLK_CORE1>,
 				<&aon_clk CLK_CORE2>,
@@ -237,64 +240,65 @@
 					"core3_clk",
 					"low_freq_clk_parent",
 					"high_freq_clk_parent";
-			clock-latency = <50000>;
+			clock-latency = <30000>;
 			voltage-tolerance = <6413>;
 			volt-share-masters-bits = <0x1>;
 			operating-points = <
 				/* kHz	uV */
-				1200000	1121875
-				1100000	1075000
-				1000000	1028125
-				884000	975000
-				768000	918750>;
+				1200000	1037500
+				1100000	987500
+				1000000	943750
+				884000	893750
+				768000	850000>;
 			operating-points-1 = <
 				/* kHz	uV */
-				1200000	1050000
-				1100000	1006250
-				1000000	959375
-				884000	903125
-				768000	900000>;
+				1200000	981250
+				1100000	937500
+				1000000	893750
+				884000	850000
+				768000	850000>;
 			operating-points-2 = <
 				/* kHz	uV */
-				1200000	1100000
-				1100000	1056250
-				1000000	1009375
-				884000	953125
-				768000	900000>;
+				1200000	1018750
+				1100000	975000
+				1000000	931250
+				884000	881250
+				768000	850000>;
 			operating-points-3 = <
 				/* kHz	uV */
-				1200000	1150000
-				1100000	1106250
-				1000000	1059375
-				884000	1003125
-				768000	950000>;
-			operating-points-1-65 = <
-				/* kHz	uV */
-				1200000	1071875
+				1200000	1068750
 				1100000	1025000
-				1000000	978125
-				884000	925000
-				768000	900000>;
-			operating-points-2-65 = <
+				1000000	981250
+				884000	931250
+				768000	881250>;
+			operating-points-1-70 = <
 				/* kHz	uV */
-				1200000	1121875
-				1100000	1075000
-				1000000	1028125
-				884000	975000
-				768000	918750>;
-			operating-points-3-65 = <
+				1200000	1000000
+				1100000	956250
+				1000000	912500
+				884000	868750
+				768000	850000>;
+			operating-points-2-70 = <
 				/* kHz	uV */
-				1100000	1125000
-				1000000	1078125
-				884000	1025000
-				768000	968750>;
+				1200000	1037500
+				1100000	993750
+				1000000	950000
+				884000	900000
+				768000	856250>;
+			operating-points-3-70 = <
+				/* kHz	uV */
+				1200000	1081250
+				1100000	1037500
+				1000000	993750
+				884000	943750
+				768000	893750>;
 	};
 
 	cpufreq_clus1: cpufreq-clus1 {
 			cpufreq-cluster-id = <1>;
 			nvmem-cells = <&dvfs_bin_cpu1>;
 			nvmem-cell-names = "dvfs_bin";
-			sprd,cpufreq-temp-threshold = <65>;
+			sprd,cpufreq-temp-threshold = <70>;
 			cpufreq-sub-clusters = <&cpufreq_fcm>;
 			clocks = <&aon_clk CLK_CORE4>,
 				<&aon_clk CLK_CORE5>,
@@ -308,137 +312,138 @@
 					"core3_clk",
 					"low_freq_clk_parent",
 					"high_freq_clk_parent";
-			clock-latency = <50000>;
+			clock-latency = <30000>;
 			voltage-tolerance = <0>;
 			volt-share-masters-bits = <0xa>;
 			freq-sync-slaves-bits = <0x8>;
 			operating-points = <
 				/* kHz	uV */
-				1600000	1121875
-				1500000	1084375
-				1400000	1050000
-				1225000	984375
-				1050000	921875
-				768000	900000>;
+				1700000	1087500
+				1500000	1025000
+				1400000	987500
+				1225000	937500
+				1050000	887500
+				768000	862500>;
 			operating-points-1 = <
 				/* kHz	uV */
-				1600000	1050000
-				1500000	1015625
-				1400000	978125
-				1225000	915625
-				1050000	900000
-				768000	900000>;
+				1700000	1037500
+				1500000	975000
+				1400000	937500
+				1225000	887500
+				1050000	862500
+				768000	862500>;
 			operating-points-2 = <
 				/* kHz	uV */
-				1600000	1100000
-				1500000	1065625
-				1400000	1028125
-				1225000	965625
-				1050000	903125
-				768000	900000>;
+				1700000	1075000
+				1500000	1012500
+				1400000	975000
+				1225000	925000
+				1050000	868750
+				768000	862500>;
 			operating-points-3 = <
 				/* kHz	uV */
-				1600000	1150000
-				1500000	1115625
-				1400000	1078125
-				1225000	1015625
-				1050000	953125
-				768000	900000>;
-			operating-points-1-65 = <
+				1700000	1125000
+				1500000	1050000
+				1400000	1012500
+				1225000	962500
+				1050000	906250
+				768000	862500>;
+			operating-points-1-70 = <
 				/* kHz	uV */
-				1600000	1071875
-				1500000	1034375
-				1400000	1000000
-				1225000	934375
-				1050000	900000
-				768000	900000>;
-			operating-points-2-65 = <
+				1700000	1062500
+				1500000	1000000
+				1400000	962500
+				1225000	906250
+				1050000	862500
+				768000	862500>;
+			operating-points-2-70 = <
 				/* kHz	uV */
-				1600000	1121875
-				1500000	1084375
-				1400000	1050000
-				1225000	984375
-				1050000	921875
-				768000	900000>;
-			operating-points-3-65 = <
+				1700000	1100000
+				1500000	1025000
+				1400000	987500
+				1225000	937500
+				1050000	887500
+				768000	862500>;
+			operating-points-3-70 = <
 				/* kHz	uV */
-				1500000	1134375
-				1400000	1100000
-				1225000	1034375
-				1050000	971875
-				768000	900000>;
+				1700000	1137500
+				1400000	1025000
+				1225000	975000
+				1050000	918750
+				768000	862500>;
 	};
 
 	cpufreq_fcm: cpufreq-fcm {
 			cpufreq-cluster-id = <3>;
 			nvmem-cells = <&dvfs_bin_dsu>;
 			nvmem-cell-names = "dvfs_bin";
-			sprd,cpufreq-temp-threshold = <65>;
+			sprd,cpufreq-temp-threshold = <70>;
 			clocks = <&aon_clk CLK_SCU>,
 				<&pll CLK_TWPLL_768M>,
 				<&mpll CLK_MPLL2>;
 			clock-names = "clk",
 					"clk_low",
 					"clk_high";
-			clock-latency = <50000>;
+			clock-latency = <30000>;
 			voltage-tolerance = <0>;
 			volt-share-masters-bits = <0xa>;
 			freq-sync-hosts-bits = <0x2>;
 			operating-points = <
 				/* kHz	uV */
-				1250000	1121875
-				1172000	1084375
-				1095000	1050000
-				959000	984375
-				824000	921875
-				768000	900000>;
+				1250000	1050000
+				1172000	1018750
+				1095000	987500
+				959000	937500
+				824000	887500
+				768000	862500>;
 			operating-points-1 = <
 				/* kHz	uV */
-				1250000	1050000
-				1172000	1015625
-				1095000	978125
-				959000	915625
-				824000	900000
-				768000	900000>;
+				1250000	1000000
+				1172000	968750
+				1095000	937500
+				959000	887500
+				824000	862500
+				768000	862500>;
 			operating-points-2 = <
 				/* kHz	uV */
-				1250000	1100000
-				1172000	1065625
-				1095000	1028125
-				959000	965625
-				824000	903125
-				768000	900000>;
+				1250000	1037500
+				1172000	1006250
+				1095000	975000
+				959000	925000
+				824000	868750
+				768000	862500>;
 			operating-points-3 = <
 				/* kHz	uV */
-				1250000	1150000
-				1172000	1115625
-				1095000	1078125
-				959000	1015625
-				824000	953125
-				768000	925000>;
-			operating-points-1-65 = <
+				1250000	1087500
+				1172000	1056250
+				1095000	1025000
+				959000	975000
+				824000	918750
+				768000	875000>;
+			operating-points-1-70 = <
 				/* kHz	uV */
-				1250000	1071875
-				1172000	1034375
-				1095000	1000000
-				959000	934375
-				824000	900000
-				768000	900000>;
-			operating-points-2-65 = <
+				1250000	1018750
+				1172000	987500
+				1095000	956250
+				959000	906250
+				824000	862500
+				768000	862500>;
+			operating-points-2-70 = <
 				/* kHz	uV */
-				1250000	1121875
-				1172000	1084375
-				1095000	1050000
-				959000	984375
-				824000	921875
-				768000	918750>;
-			operating-points-3-65 = <
+				1250000	1050000
+				1172000	1018750
+				1095000	987500
+				959000	937500
+				824000	887500
+				768000	862500>;
+			operating-points-3-70 = <
 				/* kHz	uV */
-				1172000	1134375
-				1095000	1100000
-				959000	1034375
-				824000	971875
-				768000	968750>;
+				1250000	1100000
+				1172000	1068750
+				1095000	1037500
+				959000	987500
+				824000	931250
+				768000	887500>;
 	};
 
 	gic: interrupt-controller@14000000 {
