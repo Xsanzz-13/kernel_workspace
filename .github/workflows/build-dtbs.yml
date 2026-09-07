@@ -24,6 +24,8 @@ jobs:
             libyaml-dev \
             pkg-config \
             device-tree-compiler \
+            libc++-dev \
+            libc++abi-dev \
             python3 \
             python2 \
             git \
@@ -102,6 +104,21 @@ jobs:
           echo "===== OVERLAY TOOLS ====="
           ls -l tools/mkdtimg/ufdt_apply_overlay
           ls -l tools/mkdtimg/ufdt_verify_overlay_host
+          
+      - name: Fix Overlay Host Tools
+        run: |
+          chmod +x tools/mkdtimg/ufdt_apply_overlay
+          chmod +x tools/mkdtimg/ufdt_verify_overlay_host
+          
+          echo "===== libc++ ====="
+          ls -lh /lib/x86_64-linux-gnu/libc++* || true
+          ls -lh /usr/lib/x86_64-linux-gnu/libc++* || true
+
+          echo "===== ufdt_verify_overlay_host ====="
+          file tools/mkdtimg/ufdt_verify_overlay_host
+
+          echo "===== NEEDED LIBRARIES ====="
+          ldd tools/mkdtimg/ufdt_verify_overlay_host || true
 
       - name: Build DTBS
         run: |
