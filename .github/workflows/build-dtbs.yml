@@ -79,7 +79,7 @@ jobs:
             BSP_BUILD_DT_OVERLAY=y \
             a3core_eur_open_defconfig
 
-            - name: Fix Host Linker for DTC
+      - name: Fix Host Linker for DTC
         run: |
           echo "===== LIBYAML ====="
           pkg-config --cflags yaml-0.1
@@ -103,7 +103,7 @@ jobs:
             DTC_OVERLAY_VTS_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" \
             scripts/dtc/dtc V=1
 
-            - name: Build DTBS
+      - name: Build DTBS
         run: |
           make -j2 V=1 O=out \
             ARCH=arm64 \
