@@ -4,7 +4,7 @@ set -e
 # INISIALISASI & PATH 
 # ==========================================
 export KERNEL_ROOT=$GITHUB_WORKSPACE
-export TOOLCHAIN_DIR=$GITHUB_WORKSPACE/../toolchain
+export TOOLCHAIN_DIR=$KERNEL_ROOT/toolchain_download
 export ARCH=arm64
 export SUBARCH=arm64
 export CLANG_TRIPLE=aarch64-linux-gnu-
