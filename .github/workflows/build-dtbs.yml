@@ -67,6 +67,37 @@ jobs:
         run: |
           rm -rf out/scripts/dtc
 
+      - name: Verify LibYAML
+        run: |
+          echo "===== YAML HEADER ====="
+          dpkg -L libyaml-dev | grep -E 'yaml\.h$|libyaml'
+
+          echo "===== YAML LIBRARY ====="
+          ldconfig -p | grep yaml || true
+
+          echo "===== PKG CONFIG ====="
+          pkg-config --cflags yaml-0.1
+          pkg-config --libs yaml-0.1
+          pkg-config --modversion yaml-0.1
+
+          echo "===== SYMBOL CHECK ====="
+          nm -D /usr/lib/x86_64-linux-gnu/libyaml-0.so.2 | grep 'yaml_emitter_emit' || true
+          nm -D /usr/lib/x86_64-linux-gnu/libyaml-0.so.2 | grep 'yaml_emitter_initialize' || true
+
+          echo "===== DIRECT LINK TEST ====="
+          cat > /tmp/test_yaml.c <<'EOF'
+          #include <yaml.h>
+          int main(void) {
+              yaml_emitter_t emitter;
+              yaml_emitter_initialize(&emitter);
+              yaml_emitter_delete(&emitter);
+              return 0;
+          }
+          EOF
+
+          gcc /tmp/test_yaml.c -lyaml -o /tmp/test_yaml
+          /tmp/test_yaml
+
       - name: Build DTBS
         run: |
           make -j2 V=1 O=out \
