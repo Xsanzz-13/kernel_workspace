@@ -40,7 +40,7 @@ jobs:
           clang --version
           aarch64-linux-android-gcc --version
 
-      - name: Build DTBS
+            - name: Generate Kernel Config
         run: |
           export ARCH=arm64
           export SUBARCH=arm64
@@ -48,6 +48,20 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-android-
 
           mkdir -p out
+
+          make O=out \
+            ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-android- \
+            a3core_eur_open_defconfig
+
+      - name: Build DTBS
+        run: |
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export CROSS_COMPILE=aarch64-linux-android-
 
           make O=out \
             ARCH=arm64 \
