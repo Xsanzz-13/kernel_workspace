@@ -53,12 +53,21 @@ jobs:
           echo "DTC_OVERLAY_TEST_EXT=${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_apply_overlay" >> "$GITHUB_ENV"
           echo "DTC_OVERLAY_VTS_EXT=${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" >> "$GITHUB_ENV"
 
-      - name: Check Toolchain
+      - name: Check Toolchain and YAML
         run: |
+          echo "===== CLANG ====="
           clang --version
+
+          echo "===== GCC ====="
           aarch64-linux-gnu-gcc --version
+
+          echo "===== LIBYAML ====="
           pkg-config --modversion yaml-0.1
+          pkg-config --cflags yaml-0.1
           pkg-config --libs yaml-0.1
+
+          echo "===== YAML LIBRARY ====="
+          ldconfig -p | grep libyaml || true
 
       - name: Generate Kernel Config
         run: |
@@ -70,46 +79,34 @@ jobs:
             BSP_BUILD_DT_OVERLAY=y \
             a3core_eur_open_defconfig
 
-           - name: Patch DTC libyaml
-       run: |
-          echo "===== BEFORE ====="
-          grep -n -E 'HOSTLDLIBS_dtc|yamltree|yaml' scripts/dtc/Makefile || true
-
-          printf '\nHOSTLDLIBS_dtc += -lyaml\n' >> scripts/dtc/Makefile
-
-          echo "===== AFTER ====="
-          tail -20 scripts/dtc/Makefile
-
-            - name: Build DTBS
+      - name: Fix DTC YAML Link
         run: |
-          echo "===== YAML CHECK ====="
-          pkg-config --exists yaml-0.1
-          echo "yaml version:"
-          pkg-config --modversion yaml-0.1
-          echo "yaml cflags:"
-          pkg-config --cflags yaml-0.1
-          echo "yaml libs:"
-          pkg-config --libs yaml-0.1
-
-          echo "===== LIBYAML CHECK ====="
-          ldconfig -p | grep yaml || true
-          nm -D /usr/lib/x86_64-linux-gnu/libyaml-0.so.2 | grep yaml_emitter_emit || true
-
-          echo "===== DTC MAKEFILE ====="
+          echo "===== ORIGINAL DTC MAKEFILE ====="
           grep -n -E 'yaml|HOSTLDLIBS_dtc|yamltree' scripts/dtc/Makefile || true
 
-          echo "===== CLEAN OLD DTC ====="
+          echo ""
+          echo "===== ADD LIBYAML ====="
+          printf '\nHOSTLDLIBS_dtc += -lyaml\n' >> scripts/dtc/Makefile
+
+          echo ""
+          echo "===== FINAL DTC MAKEFILE ====="
+          tail -20 scripts/dtc/Makefile
+
+      - name: Build DTBS
+        run: |
           rm -rf out/scripts/dtc
 
-          echo "===== BUILD DTBS ====="
           make -j2 V=1 O=out \
             ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LD=ld.lld \
+            BSP_BUILD_FAMILY=sharkl3 \
+            BSP_BUILD_ANDROID_OS=y \
             BSP_BUILD_DT_OVERLAY=y \
-            HOSTLDLIBS_dtc=-lyaml \
+            DTC_OVERLAY_TEST_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_apply_overlay" \
+            DTC_OVERLAY_VTS_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" \
             dtbs
 
       - name: Collect DTBS
@@ -120,6 +117,9 @@ jobs:
             -type f \
             -name "*.dtb" \
             -exec cp {} output_artifacts/ \;
+
+          echo "===== DTBS RESULT ====="
+          find output_artifacts -type f -name "*.dtb" -print
 
       - name: Upload DTBS
         uses: actions/upload-artifact@v4
