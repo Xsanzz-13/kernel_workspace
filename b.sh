@@ -85,6 +85,10 @@ export KBUILD_BUILD_TIMESTAMP="$(date '+%a %b %d %T WIB %Y')"
 export KCFLAGS="-march=armv8.2-a+crypto -mtune=cortex-a55"
 export KBUILD_LDFLAGS="--gc-sections --icf=all"
 
+# Ignore yaml
+sed -i '/yamltree.o/d' scripts/dtc/Makefile
+sed -i '/dt_to_yaml/d' scripts/dtc/dtc.c
+
 # Eksekusi Build Image
 make -C $KERNEL_ROOT O=$KERNEL_ROOT/out -j$(nproc) ARCH=$ARCH \
     CC=$CC \
