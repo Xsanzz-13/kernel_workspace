@@ -34,7 +34,6 @@ jobs:
             cpio \
             gcc-aarch64-linux-gnu \
             libncurses-dev \
-            libyaml-dev \
             tar
 
       - name: Setup Toolchain
@@ -95,13 +94,14 @@ jobs:
           echo "===== DTC MAKEFILE ====="
           tail -n 15 scripts/dtc/Makefile
 
-     - name: Set Execute Permission
-       run: |
-    chmod +x tools/mkdtimg/ufdt_apply_overlay
-    chmod +x tools/mkdtimg/ufdt_verify_overlay_host
+      - name: Set Execute Permission
+        run: |
+          chmod +x tools/mkdtimg/ufdt_apply_overlay
+          chmod +x tools/mkdtimg/ufdt_verify_overlay_host
 
-    ls -l tools/mkdtimg/ufdt_apply_overlay
-    ls -l tools/mkdtimg/ufdt_verify_overlay_host
+          echo "===== OVERLAY TOOLS ====="
+          ls -l tools/mkdtimg/ufdt_apply_overlay
+          ls -l tools/mkdtimg/ufdt_verify_overlay_host
 
       - name: Build DTBS
         run: |
@@ -122,9 +122,14 @@ jobs:
       - name: Collect DTBS
         run: |
           mkdir -p dtbs_output
-          find out/arch/arm64/boot/dts -type f \
+
+          find out/arch/arm64/boot/dts \
+            -type f \
             \( -name "*.dtb" -o -name "*.dtbo" \) \
             -exec cp --parents {} dtbs_output/ \;
+
+          echo "===== GENERATED DTBS ====="
+          find dtbs_output -type f | sort
 
       - name: Upload DTBS
         uses: actions/upload-artifact@v4
