@@ -22,7 +22,7 @@ jobs:
         ./b.sh
 
     - name: Upload Hasil Jadi (Artifacts)
-      uses: actions/artifacts@v4
-      with:
-        name: Hasil-Kernel
-        path: ${{ github.workspace }}/output_artifacts/*
+  uses: actions/upload-artifact@v4
+  with:
+    name: Hasil-Kernel-
+    path: ${{ github.workspace }}/output_artifacts/*
