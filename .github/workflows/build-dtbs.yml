@@ -27,67 +27,44 @@ jobs:
             python3 \
             python2 \
             git \
+            zip \
+            unzip \
+            curl \
+            wget \
             cpio \
-            gcc-aarch64-linux-gnu
+            gcc-aarch64-linux-gnu \
+            libncurses-dev \
+            libyaml-dev \
+            tar
 
       - name: Setup Toolchain
         run: |
-          echo "${GITHUB_WORKSPACE}/toolchain/clang-r383902/bin" >> "$GITHUB_PATH"
-          echo "${GITHUB_WORKSPACE}/toolchain/aarch64-linux-android-4.9/bin" >> "$GITHUB_PATH"
+          export PATH="${GITHUB_WORKSPACE}/toolchain/clang-r383902/bin:${GITHUB_WORKSPACE}/toolchain/aarch64-linux-android-4.9/bin:$PATH"
 
-      - name: Setup Environment
-        run: |
+          echo "PATH=${PATH}" >> "$GITHUB_ENV"
+
           echo "ARCH=arm64" >> "$GITHUB_ENV"
           echo "SUBARCH=arm64" >> "$GITHUB_ENV"
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> "$GITHUB_ENV"
-          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> "$GITHUB_ENV"
-
+          echo "CROSS_COMPILE=aarch64-linux-android-" >> "$GITHUB_ENV"
           echo "BSP_BUILD_FAMILY=sharkl3" >> "$GITHUB_ENV"
           echo "BSP_BUILD_ANDROID_OS=y" >> "$GITHUB_ENV"
-          echo "BSP_BUILD_DT_OVERLAY=y" >> "$GITHUB_ENV"
-
           echo "DTC_OVERLAY_TEST_EXT=${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_apply_overlay" >> "$GITHUB_ENV"
           echo "DTC_OVERLAY_VTS_EXT=${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" >> "$GITHUB_ENV"
 
-      - name: Check LibYAML
-        run: |
-          echo "===== LIBYAML ====="
-          pkg-config --cflags yaml-0.1
-          pkg-config --libs yaml-0.1
-
-      - name: Generate Defconfig
-        run: |
-          make O=out \
-            CC=clang \
-            LD=ld.lld \
-            BSP_BUILD_DT_OVERLAY=y \
-            a3core_eur_open_defconfig
-
-      - name: Clean DTC Objects
-        run: |
-          rm -rf out/scripts/dtc
+          clang --version
+          gcc --version
 
       - name: Verify LibYAML
         run: |
-          echo "===== YAML HEADER ====="
-          dpkg -L libyaml-dev | grep -E 'yaml\.h$|libyaml'
-
-          echo "===== YAML LIBRARY ====="
-          ldconfig -p | grep yaml || true
-
-          echo "===== PKG CONFIG ====="
           pkg-config --cflags yaml-0.1
           pkg-config --libs yaml-0.1
-          pkg-config --modversion yaml-0.1
 
-          echo "===== SYMBOL CHECK ====="
-          nm -D /usr/lib/x86_64-linux-gnu/libyaml-0.so.2 | grep 'yaml_emitter_emit' || true
-          nm -D /usr/lib/x86_64-linux-gnu/libyaml-0.so.2 | grep 'yaml_emitter_initialize' || true
-
-          echo "===== DIRECT LINK TEST ====="
           cat > /tmp/test_yaml.c <<'EOF'
           #include <yaml.h>
-          int main(void) {
+
+          int main(void)
+          {
               yaml_emitter_t emitter;
               yaml_emitter_initialize(&emitter);
               yaml_emitter_delete(&emitter);
@@ -98,6 +75,26 @@ jobs:
           gcc /tmp/test_yaml.c -lyaml -o /tmp/test_yaml
           /tmp/test_yaml
 
+      - name: Prepare Defconfig
+        run: |
+          make O=out \
+            ARCH=arm64 \
+            CC=clang \
+            LD=ld.lld \
+            BSP_BUILD_DT_OVERLAY=y \
+            a3core_eur_open_defconfig
+
+      - name: Fix DTC LibYAML Link
+        run: |
+          cat >> scripts/dtc/Makefile <<'EOF'
+
+          # Fix libyaml linking for old 4.14 Kbuild
+          HOSTLOADLIBES_dtc := -lyaml
+          EOF
+
+          echo "===== DTC MAKEFILE ====="
+          tail -n 15 scripts/dtc/Makefile
+
       - name: Build DTBS
         run: |
           make -j2 V=1 O=out \
@@ -107,7 +104,6 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu- \
             LD=ld.lld \
             HOSTCC=gcc \
-            HOSTLDFLAGS="-lyaml" \
             BSP_BUILD_FAMILY=sharkl3 \
             BSP_BUILD_ANDROID_OS=y \
             BSP_BUILD_DT_OVERLAY=y \
@@ -117,18 +113,13 @@ jobs:
 
       - name: Collect DTBS
         run: |
-          mkdir -p output_dtbs
-
-          find out/arch/arm64/boot/dts \
-            -type f \
+          mkdir -p dtbs_output
+          find out/arch/arm64/boot/dts -type f \
             \( -name "*.dtb" -o -name "*.dtbo" \) \
-            -exec cp {} output_dtbs/ \;
-
-          echo "===== DTBS ====="
-          find output_dtbs -type f -print
+            -exec cp --parents {} dtbs_output/ \;
 
       - name: Upload DTBS
         uses: actions/upload-artifact@v4
         with:
           name: DTBS
-          path: output_dtbs/*
+          path: dtbs_output/
