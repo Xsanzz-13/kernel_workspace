@@ -28,7 +28,21 @@ jobs:
             gcc-aarch64-linux-gnu \
             libncurses-dev \
             libyaml-dev \
+            pkg-config \
             device-tree-compiler
+
+          echo "=== YAML CHECK ==="
+          pkg-config --modversion yaml-0.1
+          pkg-config --cflags yaml-0.1
+          pkg-config --libs yaml-0.1
+          ldconfig -p | grep libyaml
+
+      - name: Perbaiki Linker DTC
+        run: |
+          sed -i '/HOSTLDLIBS_dtc/ s/=.*/= -lyaml/' scripts/dtc/Makefile
+
+          echo "=== DTC MAKEFILE ==="
+          grep -n "HOSTLDLIBS_dtc" scripts/dtc/Makefile
 
       - name: Gunakan Toolchain dari Repository
         run: |
