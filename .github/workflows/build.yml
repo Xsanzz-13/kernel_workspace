@@ -18,8 +18,8 @@ jobs:
 
     - name: Eksekusi Kompilasi Kernel
       run: |
-        chmod +x build.sh
-        ./build.sh
+        chmod +x b.sh
+        ./b.sh
 
     - name: Upload Hasil Jadi (Artifacts)
       uses: actions/upload-artifact@v4
