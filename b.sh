@@ -15,15 +15,6 @@ export BSP_BUILD_ANDROID_OS=y
 export DEFCONFIG="a3core_eur_open_defconfig"
 
 # ==========================================
-# TAHAP 3: Install Dependencies
-# ==========================================
-echo "[+] Menginstal dependencies sistem..."
-sudo apt-get update && sudo apt-get install -y \
-    build-essential bc bison flex libssl-dev libelf-dev ccache \
-    python3-minimal python2 git zip unzip curl wget cpio \
-    gcc-aarch64-linux-gnu libncurses-dev && sudo apt-get clean
-
-# ==========================================
 # TAHAP 1: KSU Integration
 # ==========================================
 echo "[+] Mengintegrasikan KernelSU..."
@@ -46,7 +37,7 @@ else
 fi
 
 # ==========================================
-# TAHAP 4: Setup Toolchains dari Skrip
+# TAHAP 3: Setup Toolchains dari Skrip
 # ==========================================
 mkdir -p $TOOLCHAIN_DIR/gcc-14.3 $TOOLCHAIN_DIR/clang-r383902b
 
@@ -72,7 +63,7 @@ export CROSS_COMPILE="$TOOLCHAIN_DIR/gcc-14.3/bin/aarch64-none-linux-gnu-"
 export CROSS_COMPILE_ARM32="$TOOLCHAIN_DIR/gcc-14.3/bin/arm-none-linux-gnueabihf-"
 
 # ==========================================
-# TAHAP 5: Konfigurasi & Build Kernel
+# TAHAP 4: Konfigurasi & Build Kernel
 # ==========================================
 echo "[+] Melakukan konfigurasi kernel dengan $DEFCONFIG..."
 make -C $KERNEL_ROOT O=$KERNEL_ROOT/out ARCH=$ARCH CC=$CC LD=ld.lld $DEFCONFIG
