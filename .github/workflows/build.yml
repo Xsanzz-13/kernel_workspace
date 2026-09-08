@@ -11,22 +11,65 @@ jobs:
     - name: Checkout Source Kernel
       uses: actions/checkout@v4
 
-    - name: Ubah Default Shell ke Bash (Perbaikan Illegal Option)
+    - name: Ubah Default Shell ke Bash
       run: |
         sudo ln -sf /bin/bash /bin/sh
+
+    # ================================
+    # CACHE TOOLCHAIN
+    # ================================
+    - name: Cache Toolchains
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ github.workspace }}/toolchain_download
+        key: toolchain-ubuntu22-clang-r383902b-gcc-14.3-v1
+        restore-keys: |
+          toolchain-ubuntu22-
+
+    # ================================
+    # CACHE APT
+    # ================================
+    - name: Cache APT
+      uses: actions/cache@v4
+      with:
+        path: |
+          /var/cache/apt/archives
+        key: apt-ubuntu-22.04-v1
+        restore-keys: |
+          apt-ubuntu-22.04-
 
     - name: Install Dependencies Sistem
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev ccache python3-minimal python2 git zip unzip curl wget cpio gcc-aarch64-linux-gnu libncurses-dev libyaml-dev tar
+        sudo apt-get install -y \
+          build-essential \
+          bc \
+          bison \
+          flex \
+          libssl-dev \
+          libelf-dev \
+          ccache \
+          python3-minimal \
+          python2 \
+          git \
+          zip \
+          unzip \
+          curl \
+          wget \
+          cpio \
+          gcc-aarch64-linux-gnu \
+          libncurses-dev \
+          libyaml-dev \
+          tar
 
     - name: Eksekusi Kompilasi Kernel
       run: |
         chmod +x b.sh
         ./b.sh
 
-    - name: Upload Hasil Jadi (Artifacts)
+    - name: Upload Hasil Jadi
       uses: actions/upload-artifact@v4
       with:
-        name: Hasil-Kernel-KSU-Sprd
+        name: Hasil-Kernel-Sprd
         path: ${{ github.workspace }}/output_artifacts/*
