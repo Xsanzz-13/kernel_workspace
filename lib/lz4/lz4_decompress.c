@@ -39,6 +39,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <asm/unaligned.h>
+#include "lz4armv8/lz4accel.h"
 
 /*-*****************************
  *	Decompression functions
@@ -334,12 +335,53 @@ _output_error:
 	return -1;
 }
 
+#if defined(__ARCH_HAS_LZ4_ACCELERATOR)
+static int LZ4_arm64_decompress_safe(const char *source, char *dest,
+        int compressedSize, int maxDecompressedSize)
+{
+        uint8_t *dstPtr = (uint8_t *)dest;
+        const uint8_t *srcPtr = (const uint8_t *)source;
+        int ret, consumed, produced;
+
+        if (compressedSize <= LZ4_FAST_MARGIN ||
+                maxDecompressedSize <= LZ4_FAST_MARGIN ||
+                !lz4_decompress_accel_enable())
+                goto fallback;
+
+        ret = lz4_decompress_asm(&dstPtr, (uint8_t *)dest,
+                (uint8_t *)dest + maxDecompressedSize - LZ4_FAST_MARGIN,
+                &srcPtr, (const uint8_t *)source + compressedSize - LZ4_FAST_MARGIN,
+                false);
+        if (ret)
+                return -1;
+
+        consumed = (int)(srcPtr - (const uint8_t *)source);
+        produced = (int)(dstPtr - (uint8_t *)dest);
+
+        ret = LZ4_decompress_generic((const char *)srcPtr, (char *)dstPtr,
+                compressedSize - consumed, maxDecompressedSize - produced,
+                endOnInputSize, full, 0, noDict, (const BYTE *)dest, NULL, 0);
+        if (ret < 0)
+                return -1;
+
+        return produced + ret;
+
+fallback:
+        return LZ4_decompress_generic(source, dest, compressedSize,
+                maxDecompressedSize, endOnInputSize, full, 0,
+                noDict, (BYTE *)dest, NULL, 0);
+}
+#endif
 int LZ4_decompress_safe(const char *source, char *dest,
 	int compressedSize, int maxDecompressedSize)
 {
-	return LZ4_decompress_generic(source, dest, compressedSize,
-		maxDecompressedSize, endOnInputSize, full, 0,
-		noDict, (BYTE *)dest, NULL, 0);
+#if defined(__ARCH_HAS_LZ4_ACCELERATOR)
+        return LZ4_arm64_decompress_safe(source, dest, compressedSize, maxDecompressedSize);
+#else
+        return LZ4_decompress_generic(source, dest, compressedSize,
+                maxDecompressedSize, endOnInputSize, full, 0,
+                noDict, (BYTE *)dest, NULL, 0);
+#endif
 }
 
 int LZ4_decompress_safe_partial(const char *source, char *dest,
