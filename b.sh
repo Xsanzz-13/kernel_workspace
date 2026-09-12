@@ -97,12 +97,38 @@ make -C $KERNEL_ROOT O=$KERNEL_ROOT/out -j$(nproc) ARCH=$ARCH \
 # TAHAP ARTIFACTS: Pengumpulan Hasil Jadi
 # ==========================================
 echo "[+] Mengumpulkan hasil eksport..."
-mkdir -p $GITHUB_WORKSPACE/output_artifacts
+mkdir -p "$GITHUB_WORKSPACE/output_artifacts"
 
-# Ambil Image kernel jika berhasil terbentuk
-if [ -f "$KERNEL_ROOT/out/arch/arm64/boot/Image" ]; then
-  cp $KERNEL_ROOT/out/arch/arm64/boot/Image $GITHUB_WORKSPACE/output_artifacts/
-  echo "[+] Berhasil menyalin Kernel Image ke folder output."
-else
-  echo "[!] Waduh, berkas Image kernel tidak ditemukan di folder out."
+OUT="$KERNEL_ROOT/out"
+ART="$GITHUB_WORKSPACE/output_artifacts"
+
+# Kernel Image
+if [ -f "$OUT/arch/arm64/boot/Image" ]; then
+    cp "$OUT/arch/arm64/boot/Image" "$ART/"
+    echo "[+] Image"
 fi
+
+# Kernel config
+if [ -f "$OUT/.config" ]; then
+    cp "$OUT/.config" "$ART/kernel.config"
+    echo "[+] .config"
+fi
+
+# System.map
+if [ -f "$OUT/System.map" ]; then
+    cp "$OUT/System.map" "$ART/"
+    echo "[+] System.map"
+fi
+
+# Module symbol table
+if [ -f "$OUT/Module.symvers" ]; then
+    cp "$OUT/Module.symvers" "$ART/"
+    echo "[+] Module.symvers"
+fi
+
+# Ambil semua module .ko yang terbentuk
+find "$OUT" -type f -name "*.ko" -exec cp --parents {} "$ART/modules/" \; 2>/dev/null || true
+
+echo ""
+echo "[+] Daftar artifact:"
+du -h "$ART"/* "$ART"/modules/* 2>/dev/null || true
