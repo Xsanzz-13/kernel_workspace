@@ -220,7 +220,7 @@
 		CORE_PD: core_pd {
 			compatible = "arm,idle-state";
 			entry-latency-us = <800>;
-			exit-latency-us = <300>;
+			exit-latency-us = <250>;
 			min-residency-us = <2500>;
 			local-timer-stop;
 			arm,psci-suspend-param = <0x00010000>;
