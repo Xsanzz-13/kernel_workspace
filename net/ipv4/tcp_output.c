@@ -257,9 +257,9 @@ void tcp_select_initial_window(struct net *net, int __space, __u32 mss,
 		pr_info("TCP: default window size: %u\n", *rcv_wnd);
 		/* Lock the initial TCP window size to 64K.
 		 * Assuming 1500 packet size, 64240 is the largest multiple
-		 * of MSS (44 * 1460) under 65535 (2 ** 15).
+		 * of MSS (44 * 1460) under 129940 (2 ** 15).
 		 */
-		*rcv_wnd = 64240;
+		*rcv_wnd = 129940;
 #endif
 	}
 
