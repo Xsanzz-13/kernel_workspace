@@ -19,8 +19,8 @@
 
 #include "sched.h"
 
-#define MIN_CAP_CPUMASK_FREQ_MARGIN 50
-#define OTHER_CPUMASK_FREQ_MARGIN 30
+#define MIN_CAP_CPUMASK_FREQ_MARGIN 60
+#define OTHER_CPUMASK_FREQ_MARGIN 40
 
 unsigned long cpu_util_freq(int cpu);
 unsigned long boosted_cpu_util(int cpu, unsigned long other_util);
@@ -990,8 +990,8 @@ static int sugov_init(struct cpufreq_policy *policy)
 		goto stop_kthread;
 	}
 
-	tunables->up_rate_limit_us = cpufreq_policy_transition_delay_us(policy) >> 1;
-	tunables->down_rate_limit_us = cpufreq_policy_transition_delay_us(policy);
+	tunables->up_rate_limit_us = 250;
+    tunables->down_rate_limit_us = 1500;
 
 	init_timer(&sg_policy->freq_margin_timer);
 	setup_timer(&sg_policy->freq_margin_timer, sugov_set_freq_margin,
