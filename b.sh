@@ -69,11 +69,12 @@ echo "[+] Melakukan konfigurasi kernel dengan $DEFCONFIG..."
 make -C $KERNEL_ROOT O=$KERNEL_ROOT/out ARCH=$ARCH CC=$CC LD=ld.lld $DEFCONFIG
 
 echo "[+] Memulai kompilasi Kernel Image..."
-export KBUILD_BUILD_HOST="GitHub-Actions"
+export KBUILD_BUILD_USER="Xsanzz"
+export KBUILD_BUILD_HOST="A03Core"
 export KBUILD_BUILD_TIMESTAMP="$(date '+%a %b %d %T WIB %Y')"
 
 # Tambahan Flags Optimasi CPU (Cortex-A55) & Linker
-export KCFLAGS="-march=armv8.2-a+crypto -mtune=cortex-a55"
+export KCFLAGS="-march=armv8.2-a+crypto -mtune=cortex-a55 -fno-semantic-interposition"
 export KBUILD_LDFLAGS="--gc-sections --icf=all"
 
 # Ignore yaml
@@ -126,9 +127,19 @@ if [ -f "$OUT/Module.symvers" ]; then
     echo "[+] Module.symvers"
 fi
 
-# Ambil semua module .ko yang terbentuk
-find "$OUT" -type f -name "*.ko" -exec cp --parents {} "$ART/modules/" \; 2>/dev/null || true
+MODULE_DIR="$ART/modules"
+mkdir -p "$MODULE_DIR"
+
+find "$OUT" -type f -name "*.ko" | while read -r ko; do
+    rel="${ko#$OUT/}"
+    mkdir -p "$MODULE_DIR/$(dirname "$rel")"
+    cp -v "$ko" "$MODULE_DIR/$rel"
+done
+
+echo ""
+echo "[+] Daftar module:"
+find "$MODULE_DIR" -type f -name "*.ko" -exec du -h {} \;
 
 echo ""
 echo "[+] Daftar artifact:"
-du -h "$ART"/* "$ART"/modules/* 2>/dev/null || true
+find "$ART" -type f -exec du -h {} \;
