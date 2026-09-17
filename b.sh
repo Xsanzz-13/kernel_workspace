@@ -93,6 +93,26 @@ make -C $KERNEL_ROOT O=$KERNEL_ROOT/out -j$(nproc) ARCH=$ARCH \
     KCFLAGS="$KCFLAGS" \
     KBUILD_LDFLAGS="$KBUILD_LDFLAGS" \
     Image
+
+# ==========================================
+# BUILD KERNEL MODULES
+# ==========================================
+echo "[+] Memulai kompilasi kernel modules (.ko)..."
+
+make -C $KERNEL_ROOT O=$KERNEL_ROOT/out -j$(nproc) ARCH=$ARCH \
+    CC=$CC \
+    CROSS_COMPILE=$CROSS_COMPILE \
+    CROSS_COMPILE_ARM32=$CROSS_COMPILE_ARM32 \
+    CLANG_TRIPLE=$CLANG_TRIPLE \
+    LD=ld.lld \
+    AR=llvm-ar \
+    NM=llvm-nm \
+    KCFLAGS="$KCFLAGS" \
+    KBUILD_LDFLAGS="$KBUILD_LDFLAGS" \
+    modules
+
+echo "[+] Jumlah .ko yang dihasilkan:"
+find "$KERNEL_ROOT/out" -type f -name "*.ko" | wc -l
     
 # ==========================================
 # ARTIFACTS: Pengumpulan Hasil Jadi
