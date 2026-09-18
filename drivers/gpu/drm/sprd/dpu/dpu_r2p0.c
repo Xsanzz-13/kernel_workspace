@@ -1411,7 +1411,6 @@ static void dpu_enhance_set(struct dpu_context *ctx, u32 id, void *param)
 	struct scale_cfg *scale;
 	struct cm_cfg *cm;
 	struct slp_cfg *slp;
-	struct gamma_lut *gamma;
 	struct hsv_lut *hsv;
 	struct epf_cfg *epf;
 	u32 *p, i;
