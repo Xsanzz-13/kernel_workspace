@@ -359,6 +359,14 @@ struct sprd_hwdvfs_l3 {
 	    freqvolt[HWDVFS_CHNL_MAX][SPRD_HWDVFS_MAX_FREQ_VOLT];
 	atomic_t state[HWDVFS_CHNL_MAX];
 	int idx_max[HWDVFS_CHNL_MAX];
+
+	/* Runtime UV overrides, keyed by frequency. */
+	unsigned long uv_override[HWDVFS_CHNL_MAX]
+			      [SPRD_HWDVFS_MAX_FREQ_VOLT];
+	unsigned long uv_override_freq[HWDVFS_CHNL_MAX]
+				  [SPRD_HWDVFS_MAX_FREQ_VOLT];
+	bool uv_override_valid[HWDVFS_CHNL_MAX]
+			       [SPRD_HWDVFS_MAX_FREQ_VOLT];
 };
 
 
@@ -1536,6 +1544,7 @@ static int sprd_hwdvfs_l3_opp_add(void *drvdata, int cluster, unsigned long hz_f
 {
 	int ret = 0;
 	unsigned int idx_freq, index;
+	int i;
 
 	if (hwdvfs_l3 == NULL || !hwdvfs_l3->probed)
 		return -ENODEV;
@@ -1553,6 +1562,20 @@ static int sprd_hwdvfs_l3_opp_add(void *drvdata, int cluster, unsigned long hz_f
 	}
 
 	idx_freq = (hz_freq <= 768000000UL ? 0 : (idx_volt - 1));
+        /*
+         * Apply runtime UV override by frequency.
+         * Frequency is used as the key so thermal OPP rebuilding
+         * does not lose the runtime voltage setting.
+         */
+        for (i = 0; i < SPRD_HWDVFS_MAX_FREQ_VOLT; i++) {
+                if (hwdvfs_l3->uv_override_valid[cluster][i] &&
+                    hwdvfs_l3->uv_override_freq[cluster][i] == hz_freq) {
+                        u_volt = hwdvfs_l3->uv_override[cluster][i];
+                        break;
+                }
+        }
+
+
 	switch (cluster) {
 	case HWDVFS_CHNL00:
 		index = hwdvfs_l3->dcdc_index[HWDVFS_CHNL00];
@@ -1614,6 +1637,145 @@ static int sprd_hwdvfs_l3_opp_add(void *drvdata, int cluster, unsigned long hz_f
 
 	return ret;
 }
+
+/*
+ * Legacy Pimp My ROM voltage table interface.
+ *
+ * Read format:
+ *   mhz:<freq> <mV>
+ *   one OPP per line.
+ *
+ * Write format:
+ *   <mV> <mV> <mV> ...
+ *   values follow the current ascending freqvolt[] order.
+ */
+int sprd_hwdvfs_l3_uv_get_table(int cluster, char *buf,
+                                unsigned long size)
+{
+    int i;
+    int len = 0;
+
+    if (!hwdvfs_l3 || !hwdvfs_l3->probed)
+        return -ENODEV;
+
+    if (cluster < HWDVFS_CHNL00 ||
+        cluster >= HWDVFS_CHNL_MAX)
+        return -EINVAL;
+
+    for (i = 0; i <= hwdvfs_l3->idx_max[cluster]; i++) {
+        unsigned long freq;
+        unsigned long volt;
+
+        freq = hwdvfs_l3->freqvolt[cluster][i].freq;
+        volt = hwdvfs_l3->freqvolt[cluster][i].volt;
+
+        if (!freq)
+            continue;
+
+        len += scnprintf(buf + len, size - len,
+                         "mhz:%lu %lu\n",
+                         freq / 1000000UL,
+                         volt / 1000UL);
+
+        if (len >= size)
+            return size;
+    }
+
+    return len;
+}
+EXPORT_SYMBOL_GPL(sprd_hwdvfs_l3_uv_get_table);
+
+int sprd_hwdvfs_l3_uv_set_table(int cluster, const char *buf,
+                                unsigned long count)
+{
+    unsigned long values[SPRD_HWDVFS_MAX_FREQ_VOLT];
+    unsigned long value;
+    unsigned long min_uv;
+    unsigned long max_uv;
+    const char *p = buf;
+    char *end;
+    int nr = 0;
+    int i;
+    int ret;
+    unsigned int dcdc;
+
+    if (!hwdvfs_l3 || !hwdvfs_l3->probed)
+        return -ENODEV;
+
+    if (cluster < HWDVFS_CHNL00 ||
+        cluster >= HWDVFS_CHNL_MAX)
+        return -EINVAL;
+
+    dcdc = hwdvfs_l3->dcdc_index[cluster];
+    if (dcdc >= DCDC_DATA_MAX)
+        return -EINVAL;
+
+    min_uv = dcdc_data[dcdc].min_uv;
+    max_uv = dcdc_data[dcdc].max_uv;
+
+    /*
+     * Parse the complete PMR line first. Nothing is programmed
+     * until the whole table has been validated.
+     */
+    while (*p && nr < SPRD_HWDVFS_MAX_FREQ_VOLT) {
+        while (*p == ' ' || *p == '\t' ||
+               *p == '\n' || *p == '\r')
+            p++;
+
+        if (!*p)
+            break;
+
+        value = simple_strtoul(p, &end, 10);
+        if (end == p)
+            return -EINVAL;
+
+        /*
+         * PMR supplies mV. Convert to uV.
+         */
+        if (value > (~0UL / 1000UL))
+            return -ERANGE;
+
+        value *= 1000UL;
+
+        if (value < min_uv || value > max_uv)
+            return -ERANGE;
+
+        values[nr++] = value;
+        p = end;
+    }
+
+    if (nr != hwdvfs_l3->idx_max[cluster] + 1)
+        return -EINVAL;
+
+    /*
+     * Save overrides by frequency, not merely by table index.
+     * This lets thermal OPP rebuilding find the same frequency
+     * even if its index changes.
+     */
+    for (i = 0; i < nr; i++) {
+        hwdvfs_l3->uv_override_freq[cluster][i] =
+            hwdvfs_l3->freqvolt[cluster][i].freq;
+        hwdvfs_l3->uv_override[cluster][i] = values[i];
+        hwdvfs_l3->uv_override_valid[cluster][i] = true;
+    }
+
+    /*
+     * Program the current HW table through the exact same path
+     * used by the normal OPP loader.
+     */
+    for (i = 0; i < nr; i++) {
+        ret = sprd_hwdvfs_l3_opp_add(
+            hwdvfs_l3, cluster,
+            hwdvfs_l3->freqvolt[cluster][i].freq,
+            values[i], i);
+
+        if (ret)
+            return ret;
+    }
+
+    return count;
+}
+EXPORT_SYMBOL_GPL(sprd_hwdvfs_l3_uv_set_table);
 
 /*
  * @idx:        0 points to min freq, ascending order
