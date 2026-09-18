@@ -14,6 +14,7 @@
 #include <linux/delay.h>
 #include <linux/wait.h>
 #include <linux/workqueue.h>
+#include <linux/spinlock.h>
 #include "sprd_dpu.h"
 #include "sprd_corner.h"
 
@@ -243,6 +244,10 @@ static struct scale_cfg scale_copy;
 static struct cm_cfg cm_copy;
 static struct slp_cfg slp_copy;
 static struct gamma_lut gamma_copy;
+
+static unsigned int klapse_red = 256;
+static unsigned int klapse_green = 256;
+static unsigned int klapse_blue = 256;
 static struct hsv_lut hsv_copy;
 static struct epf_cfg epf_copy;
 static u32 enhance_en;
@@ -652,6 +657,105 @@ static void dump_layer_task_init(void)
 	tasklet_init(&dump_task, dump_layer_task_func, 0);
 }
 
+
+static void dpu_klapse_apply(struct dpu_context *ctx)
+{
+        struct dpu_reg *reg = (struct dpu_reg *)ctx->base;
+        int i;
+        u32 r, g, b;
+
+        for (i = 0; i < 256; i++) {
+                r = (gamma_copy.r[i] * klapse_red) >> 8;
+                g = (gamma_copy.g[i] * klapse_green) >> 8;
+                b = (gamma_copy.b[i] * klapse_blue) >> 8;
+
+                if (r > 1023)
+                        r = 1023;
+                if (g > 1023)
+                        g = 1023;
+                if (b > 1023)
+                        b = 1023;
+
+                reg->gamma_lut_addr = i;
+                udelay(1);
+                reg->gamma_lut_wdata = (r << 20) | (g << 10) | b;
+        }
+}
+
+static void dpu_klapse_work_handler(struct work_struct *work)
+{
+        struct dpu_context *ctx =
+                container_of(work, struct dpu_context, klapse_work);
+
+        if (!ctx->is_inited)
+                return;
+
+        down(&ctx->refresh_lock);
+
+        dpu_klapse_apply(ctx);
+
+        if ((ctx->if_type == SPRD_DISPC_IF_DPI) && !ctx->is_stopped) {
+                struct dpu_reg *reg = (struct dpu_reg *)ctx->base;
+
+                reg->dpu_ctrl |= BIT(2);
+                dpu_wait_update_done(ctx);
+        }
+
+        up(&ctx->refresh_lock);
+}
+
+static struct dpu_context *klapse_ctx;
+static DEFINE_SPINLOCK(klapse_lock);
+
+void sprd_dpu_klapse_set_rgb(int r, int g, int b)
+{
+        unsigned long flags;
+        struct dpu_context *ctx;
+
+        if (r < 0)
+                r = 0;
+        if (r > 256)
+                r = 256;
+        if (g < 0)
+                g = 0;
+        if (g > 256)
+                g = 256;
+        if (b < 0)
+                b = 0;
+        if (b > 256)
+                b = 256;
+
+        spin_lock_irqsave(&klapse_lock, flags);
+
+        ctx = klapse_ctx;
+        if (ctx) {
+                klapse_red = r;
+                klapse_green = g;
+                klapse_blue = b;
+
+                schedule_work(&ctx->klapse_work);
+        }
+
+        spin_unlock_irqrestore(&klapse_lock, flags);
+}
+
+void sprd_dpu_klapse_uninit(void)
+{
+        unsigned long flags;
+        struct dpu_context *ctx;
+
+        spin_lock_irqsave(&klapse_lock, flags);
+
+        ctx = klapse_ctx;
+        klapse_ctx = NULL;
+
+        spin_unlock_irqrestore(&klapse_lock, flags);
+
+        if (ctx)
+                cancel_work_sync(&ctx->klapse_work);
+}
+
+
 static int dpu_init(struct dpu_context *ctx)
 {
 	struct dpu_reg *reg = (struct dpu_reg *)ctx->base;
@@ -684,6 +788,8 @@ static int dpu_init(struct dpu_context *ctx)
 	reg->dpu_int_clr = 0xffff;
 
 	dpu_enhance_reload(ctx);
+	INIT_WORK(&ctx->klapse_work, dpu_klapse_work_handler);
+	klapse_ctx = ctx;
 
 	//dpu_write_back_config(ctx);
 
@@ -1376,17 +1482,8 @@ static void dpu_enhance_set(struct dpu_context *ctx, u32 id, void *param)
 		break;
 	case ENHANCE_CFG_ID_GAMMA:
 		memcpy(&gamma_copy, param, sizeof(gamma_copy));
-		gamma = &gamma_copy;
-		for (i = 0; i < 256; i++) {
-			reg->gamma_lut_addr = i;
-			udelay(1);
-			reg->gamma_lut_wdata = (gamma->r[i] << 20) |
-						(gamma->g[i] << 10) |
-						gamma->b[i];
-			pr_debug("0x%02x: r=%u, g=%u, b=%u\n", i,
-				gamma->r[i], gamma->g[i], gamma->b[i]);
-		}
-		reg->dpu_enhance_cfg |= BIT(5);
+           dpu_klapse_apply(ctx);
+reg->dpu_enhance_cfg |= BIT(5);
 		pr_info("enhance gamma set\n");
 		break;
 	case ENHANCE_CFG_ID_EPF:
@@ -1581,16 +1678,8 @@ static void dpu_enhance_reload(struct dpu_context *ctx)
 
 	if (enhance_en & BIT(5)) {
 		gamma = &gamma_copy;
-		for (i = 0; i < 256; i++) {
-			reg->gamma_lut_addr = i;
-			udelay(1);
-			reg->gamma_lut_wdata = (gamma->r[i] << 20) |
-						(gamma->g[i] << 10) |
-						gamma->b[i];
-			pr_debug("0x%02x: r=%u, g=%u, b=%u\n", i,
-				gamma->r[i], gamma->g[i], gamma->b[i]);
-		}
-		pr_info("enhance gamma reload\n");
+           dpu_klapse_apply(ctx);
+pr_info("enhance gamma reload\n");
 	}
 
 	reg->dpu_enhance_cfg = enhance_en;

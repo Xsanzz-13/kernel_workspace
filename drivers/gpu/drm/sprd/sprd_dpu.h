@@ -199,6 +199,7 @@ struct dpu_context {
 	struct semaphore refresh_lock;
 	struct semaphore cabc_lock;
 	struct work_struct wb_work;
+	struct work_struct klapse_work;
 	struct tasklet_struct dvfs_task;
 	u32 wb_addr_p;
 	irqreturn_t (*dpu_isr)(int irq, void *data);

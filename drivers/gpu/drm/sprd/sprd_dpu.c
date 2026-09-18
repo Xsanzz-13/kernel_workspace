@@ -25,6 +25,7 @@
 
 #include "sprd_drm.h"
 #include "sprd_dpu.h"
+#include <linux/klapse.h>
 #include "sprd_gem.h"
 #include "sysfs/sysfs_display.h"
 
@@ -1018,6 +1019,8 @@ static int sprd_dpu_init(struct sprd_dpu *dpu)
 static int sprd_dpu_uninit(struct sprd_dpu *dpu)
 {
 	struct dpu_context *ctx = &dpu->ctx;
+
+	sprd_dpu_klapse_uninit();
 
 	down(&ctx->refresh_lock);
 	down(&ctx->cabc_lock);
