@@ -483,5 +483,11 @@
 #define BIT_DVFS_CTRL_CHNL02_SCALE07(x)          (((x) & 0x1FFFF))
 
 
+
+int sprd_hwdvfs_l3_uv_get_table(int cluster, char *buf,
+                                  unsigned long size);
+int sprd_hwdvfs_l3_uv_set_table(int cluster, const char *buf,
+                                 unsigned long count);
+
 #endif /* SPRD_HWDVFS_SHARKL3_H */
 
