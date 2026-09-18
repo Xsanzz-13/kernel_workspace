@@ -26,8 +26,73 @@
 #include <linux/types.h>
 #include <linux/of_platform.h>
 #include "sprd-cpufreqhw.h"
+#include "sprd-hwdvfs-sharkl3.h"
 
 static struct cpufreq_driver sprd_hardware_cpufreq_driver;
+
+static ssize_t sprd_uv_mV_table_show(struct cpufreq_policy *policy,
+                                      char *buf)
+{
+        int cluster;
+
+        if (!policy)
+                return -EINVAL;
+
+        cluster = topology_physical_package_id(policy->cpu);
+
+        if (cluster < HWDVFS_CHNL00 ||
+            cluster >= HWDVFS_CHNL_MAX)
+                return -EINVAL;
+
+        return sprd_hwdvfs_l3_uv_get_table(cluster, buf, PAGE_SIZE);
+}
+
+static ssize_t sprd_uv_mV_table_store(struct cpufreq_policy *policy,
+                                       const char *buf, size_t count)
+{
+        int cluster;
+        int ret;
+
+        if (!policy)
+                return -EINVAL;
+
+        cluster = topology_physical_package_id(policy->cpu);
+
+        if (cluster < HWDVFS_CHNL00 ||
+            cluster >= HWDVFS_CHNL_MAX)
+                return -EINVAL;
+
+        if (!cpufreq_datas[cluster] ||
+            !cpufreq_datas[cluster]->volt_lock)
+                return -ENODEV;
+
+        mutex_lock(cpufreq_datas[cluster]->volt_lock);
+
+        ret = sprd_hwdvfs_l3_uv_set_table(cluster, buf, count);
+
+        mutex_unlock(cpufreq_datas[cluster]->volt_lock);
+
+        return ret;
+}
+
+static struct freq_attr sprd_uv_mV_table_attr = {
+        .attr = {
+                .name = "UV_mV_table",
+                .mode = 0644,
+        },
+        .show = sprd_uv_mV_table_show,
+        .store = sprd_uv_mV_table_store,
+};
+
+static struct freq_attr *sprd_hardware_cpufreq_attr[] = {
+        &cpufreq_freq_attr_scaling_available_freqs,
+#ifdef CONFIG_CPU_FREQ_BOOST_SW
+        &cpufreq_freq_attr_scaling_boost_freqs,
+#endif
+        &sprd_uv_mV_table_attr,
+        NULL,
+};
+
 static unsigned long boot_done_timestamp;
 static int boost_mode_flag = 1;
 struct sprd_cpudvfs_device *plat_dev;
@@ -536,7 +601,7 @@ static struct cpufreq_driver sprd_hardware_cpufreq_driver = {
 	.get = sprd_hardware_cpufreq_get,
 	.suspend = sprd_hardware_cpufreq_suspend,
 	.resume = sprd_hardware_cpufreq_resume,
-	.attr = cpufreq_generic_attr,
+	.attr = sprd_hardware_cpufreq_attr,
 	.boost_enabled = true,
 	.set_boost = sprd_hardware_cpufreq_set_boost,
 };
