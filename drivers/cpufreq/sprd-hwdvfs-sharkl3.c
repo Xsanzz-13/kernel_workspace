@@ -1696,7 +1696,6 @@ int sprd_hwdvfs_l3_uv_set_table(int cluster, const char *buf,
     char *end;
     int nr = 0;
     int i;
-    int ret;
     unsigned int dcdc;
 
     if (!hwdvfs_l3 || !hwdvfs_l3->probed)
@@ -1748,6 +1747,33 @@ int sprd_hwdvfs_l3_uv_set_table(int cluster, const char *buf,
         return -EINVAL;
 
     /*
+     * Update only the VTUNE field of each existing HW DVFS
+     * table entry. Preserve FCFG/FSEL and all other fields.
+     * Do not touch the MPLL table during a runtime PMR update.
+     */
+    for (i = 0; i < nr; i++) {
+        unsigned int reg;
+        unsigned int old_reg;
+        unsigned int new_reg;
+
+        reg = REG_DVFS_CTRL_CHNL00_SCALE00 +
+              (cluster * SCALE_TAB_EACH_NUM + i) * 0x4;
+
+        old_reg = dvfs_rd(reg);
+
+        new_reg = (old_reg & ~SCALE_TAB_VTUNE_MSK) |
+                  sprd_val2reg_dcdcx_vtune(
+                      (unsigned int)values[i], dcdc);
+
+        dvfs_wr(new_reg, reg);
+
+        /*
+         * Keep the software table synchronized with the HW table.
+         */
+        hwdvfs_l3->freqvolt[cluster][i].volt = values[i];
+    }
+
+    /*
      * Save overrides by frequency, not merely by table index.
      * This lets thermal OPP rebuilding find the same frequency
      * even if its index changes.
@@ -1757,20 +1783,6 @@ int sprd_hwdvfs_l3_uv_set_table(int cluster, const char *buf,
             hwdvfs_l3->freqvolt[cluster][i].freq;
         hwdvfs_l3->uv_override[cluster][i] = values[i];
         hwdvfs_l3->uv_override_valid[cluster][i] = true;
-    }
-
-    /*
-     * Program the current HW table through the exact same path
-     * used by the normal OPP loader.
-     */
-    for (i = 0; i < nr; i++) {
-        ret = sprd_hwdvfs_l3_opp_add(
-            hwdvfs_l3, cluster,
-            hwdvfs_l3->freqvolt[cluster][i].freq,
-            values[i], i);
-
-        if (ret)
-            return ret;
     }
 
     return count;
