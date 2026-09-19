@@ -40,8 +40,8 @@ static ssize_t sprd_uv_mV_table_show(struct cpufreq_policy *policy,
 
         cluster = topology_physical_package_id(policy->cpu);
 
-        if (cluster < HWDVFS_CHNL00 ||
-            cluster >= HWDVFS_CHNL_MAX)
+        if (cluster < 0 ||
+            cluster >= SPRD_CPUFREQ_MAX_CLUSTER)
                 return -EINVAL;
 
         return sprd_hwdvfs_l3_uv_get_table(cluster, buf, PAGE_SIZE);
@@ -58,8 +58,8 @@ static ssize_t sprd_uv_mV_table_store(struct cpufreq_policy *policy,
 
         cluster = topology_physical_package_id(policy->cpu);
 
-        if (cluster < HWDVFS_CHNL00 ||
-            cluster >= HWDVFS_CHNL_MAX)
+        if (cluster < 0 ||
+            cluster >= SPRD_CPUFREQ_MAX_CLUSTER)
                 return -EINVAL;
 
         if (!cpufreq_datas[cluster] ||
