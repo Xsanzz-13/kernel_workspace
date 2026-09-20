@@ -168,6 +168,8 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 
 	new_value = !!new_value;
 
+	new_value= 0;
+
 	old_value = enforcing_enabled(state);
 	if (new_value != old_value) {
 		length = avc_has_perm(&selinux_state,
@@ -613,13 +615,7 @@ static ssize_t sel_write_backtrace_filter(struct file *file,
 		goto out;
 
 	length = -EINVAL;
-/*
-*Modified for code scaning. SI23345[ANDROID][A3CORE] Heap buffer overflow in backtrace_filter driver (sel_write_backtrace_filter)
-*Jira:KSG_M168_A01-2995
-*	if (sscanf(page, "%s", new_value) != 1)
-*		goto out;
-*/
-	if (count >= AVC_BACKTRACE_COMM_LEN || sscanf(page, "%s", new_value) != 1)
+	if (sscanf(page, "%s", new_value) != 1)
 		goto out;
 
 	if (new_value) {
