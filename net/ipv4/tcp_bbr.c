@@ -129,6 +129,11 @@ static const u32 bbr_min_rtt_win_sec = 10;
 static const u32 bbr_probe_rtt_mode_ms = 200;
 /* Skip TSO below the following bandwidth (bits/sec): */
 static const int bbr_min_tso_rate = 1200000;
+/* Xsanzz: fix missing bbr_min_tso_segs() */
+static u32 bbr_min_tso_segs(struct sock *sk)
+{
+    return sk->sk_pacing_rate < (bbr_min_tso_rate >> 3) ? 1 : 2;
+}
 
 /* We use a high_gain value of 2/ln(2) because it's the smallest pacing gain
  * that will allow a smoothly increasing pacing rate that will double each RTT
