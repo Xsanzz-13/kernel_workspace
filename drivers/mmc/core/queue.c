@@ -439,7 +439,6 @@ int mmc_init_queue(struct mmc_queue *mq, struct mmc_card *card,
 		   spinlock_t *lock, const char *subname, int area_type)
 {
 	struct mmc_host *host = card->host;
-        mq_rq->req = req;
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
         if (mmc_blk_part_cmdq_en(mq))
                 return 0;
