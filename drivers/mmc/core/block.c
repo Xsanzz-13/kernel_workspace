@@ -28,6 +28,7 @@
 #include <linux/hdreg.h>
 #include <linux/kdev_t.h>
 #include <linux/blkdev.h>
+#include <linux/blk-mq.h>
 #include <linux/cdev.h>
 #include <linux/mutex.h>
 #include <linux/scatterlist.h>
@@ -71,14 +72,11 @@ MODULE_ALIAS("mmc:block");
 
 #define mmc_req_rel_wr(req)	((req->cmd_flags & REQ_FUA) && \
 				  (rq_data_dir(req) == WRITE))
-
-#ifdef CONFIG_BLK_MQ
 static bool mmc_blk_mq_end_request(struct request *req,
                                    blk_status_t error,
                                    unsigned int nr_bytes);
 static void mmc_blk_mq_end_request_all(struct request *req,
                                        blk_status_t error);
-#endif
 
 #if defined(CONFIG_EMMC_SOFTWARE_CQ_SUPPORT)
 /* emmc soft cmdq enabled if part idx <= PART_CMDQ_EN
@@ -2659,7 +2657,6 @@ bool mmc_blk_part_cmdq_en(struct mmc_queue *mq)
 }
 
 
-#ifdef CONFIG_BLK_MQ
 static bool mmc_blk_mq_end_request(struct request *req,
                                    blk_status_t error,
                                    unsigned int nr_bytes)
@@ -2678,7 +2675,6 @@ static void mmc_blk_mq_end_request_all(struct request *req,
 {
         mmc_blk_mq_end_request(req, error, blk_rq_bytes(req));
 }
-#endif
 
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
 int mmc_blk_end_queued_req(struct mmc_host *host,
