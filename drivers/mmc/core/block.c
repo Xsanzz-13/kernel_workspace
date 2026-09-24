@@ -2521,6 +2521,7 @@ static void mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *new_req)
                                                 BLK_STS_OK,
                                                 brq->data.bytes_xfered);
 
+                        }
 			/*
 			 * If the blk_end_request function returns non-zero even
 			 * though all data has been transferred and no errors
