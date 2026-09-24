@@ -50,6 +50,8 @@ static int mmc_prep_request(struct request_queue *q, struct request *req)
 	return BLKPREP_OK;
 }
 
+static struct scatterlist *mmc_alloc_sg(int sg_len, gfp_t gfp);
+
 static blk_status_t mmc_queue_rq(struct blk_mq_hw_ctx *hctx,
                                  const struct blk_mq_queue_data *bd)
 {
