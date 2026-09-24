@@ -50,7 +50,6 @@ static int mmc_prep_request(struct request_queue *q, struct request *req)
 	return BLKPREP_OK;
 }
 
-#ifdef CONFIG_BLK_MQ
 static blk_status_t mmc_queue_rq(struct blk_mq_hw_ctx *hctx,
                                  const struct blk_mq_queue_data *bd)
 {
@@ -114,7 +113,6 @@ static const struct blk_mq_ops mmc_mq_ops = {
         .init_request = mmc_mq_init_request,
         .exit_request = mmc_mq_exit_request,
 };
-#endif
 
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
 static void mmc_queue_softirq_done(struct request *req)
@@ -439,18 +437,19 @@ int mmc_init_queue(struct mmc_queue *mq, struct mmc_card *card,
 		   spinlock_t *lock, const char *subname, int area_type)
 {
 	struct mmc_host *host = card->host;
+	u64 limit = BLK_BOUNCE_HIGH;
+	int ret = -ENOMEM;
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
-        if (mmc_blk_part_cmdq_en(mq))
-                return 0;
+	int i;
 #endif
 #if defined(CONFIG_EMMC_SOFTWARE_CQ_BIND_CPUS)
 	cpumask_t cpumasks;
 	int cpu_num;
 #endif
-	u64 limit = BLK_BOUNCE_HIGH;
-	int ret = -ENOMEM;
+
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
-	int i;
+	if (mmc_blk_part_cmdq_en(mq))
+		return 0;
 #endif
 
 	if (mmc_dev(host)->dma_mask && *mmc_dev(host)->dma_mask)
