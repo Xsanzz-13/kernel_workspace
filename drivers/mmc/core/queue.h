@@ -5,6 +5,8 @@
 #include <linux/types.h>
 #include <linux/blkdev.h>
 #include <linux/blk-mq.h>
+#include <linux/list.h>
+#include <linux/wait.h>
 #include <linux/mmc/core.h>
 #include <linux/mmc/host.h>
 
@@ -13,12 +15,7 @@ static inline struct mmc_queue_req *req_to_mmc_queue_req(struct request *rq)
 	return blk_mq_rq_to_pdu(rq);
 }
 
-struct mmc_queue_req;
 
-static inline struct request *mmc_queue_req_to_req(struct mmc_queue_req *mqr)
-{
-	return blk_mq_rq_from_pdu(mqr);
-}
 
 struct task_struct;
 struct mmc_blk_data;
@@ -70,6 +67,11 @@ struct mmc_queue_req {
 	atomic_t		index;
 #endif
 };
+static inline struct request *mmc_queue_req_to_req(struct mmc_queue_req *mqr)
+{
+        return mqr->req;
+}
+
 
 struct mmc_queue {
 	struct mmc_card		*card;
@@ -79,6 +81,11 @@ struct mmc_queue {
 	bool			asleep;
 	struct mmc_blk_data	*blkdata;
 	struct request_queue	*queue;
+        struct blk_mq_tag_set     tag_set;
+        bool                      use_blk_mq;
+        struct list_head          pending;
+        spinlock_t                pending_lock;
+        wait_queue_head_t         pending_wait;
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
 	struct mmc_queue_req	mqrq[EMMC_MAX_QUEUE_DEPTH];
 #endif
