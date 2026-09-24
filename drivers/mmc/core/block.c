@@ -72,6 +72,14 @@ MODULE_ALIAS("mmc:block");
 #define mmc_req_rel_wr(req)	((req->cmd_flags & REQ_FUA) && \
 				  (rq_data_dir(req) == WRITE))
 
+#ifdef CONFIG_BLK_MQ
+static bool mmc_blk_mq_end_request(struct request *req,
+                                   blk_status_t error,
+                                   unsigned int nr_bytes);
+static void mmc_blk_mq_end_request_all(struct request *req,
+                                       blk_status_t error);
+#endif
+
 #if defined(CONFIG_EMMC_SOFTWARE_CQ_SUPPORT)
 /* emmc soft cmdq enabled if part idx <= PART_CMDQ_EN
  * user:  0
@@ -1764,9 +1772,14 @@ static void mmc_blk_issue_drv_op(struct mmc_queue *mq, struct request *req)
 
 #endif
 	mq_rq->drv_op_result = ret;
-	blk_end_request_all(req, ret ? BLK_STS_IOERR : BLK_STS_OK);
-}
+        if (req->q->mq_ops)
+                mmc_blk_mq_end_request_all(req,
+                        ret ? BLK_STS_IOERR : BLK_STS_OK);
+        else
+                blk_end_request_all(req,
+                        ret ? BLK_STS_IOERR : BLK_STS_OK);
 
+}
 static void mmc_blk_issue_discard_rq(struct mmc_queue *mq, struct request *req)
 {
 	struct mmc_blk_data *md = mq->blkdata;
@@ -1807,7 +1820,10 @@ static void mmc_blk_issue_discard_rq(struct mmc_queue *mq, struct request *req)
 	else
 		mmc_blk_reset_success(md, type);
 fail:
-	blk_end_request(req, status, blk_rq_bytes(req));
+        if (req->q->mq_ops)
+                mmc_blk_mq_end_request_all(req, status);
+        else
+                blk_end_request(req, status, blk_rq_bytes(req));
 }
 
 static void mmc_blk_issue_secdiscard_rq(struct mmc_queue *mq,
@@ -1877,17 +1893,23 @@ out_retry:
 	if (!err)
 		mmc_blk_reset_success(md, type);
 out:
-	blk_end_request(req, status, blk_rq_bytes(req));
+        if (req->q->mq_ops)
+                mmc_blk_mq_end_request_all(req, status);
+        else
+                blk_end_request(req, status, blk_rq_bytes(req));
 }
 
 static void mmc_blk_issue_flush(struct mmc_queue *mq, struct request *req)
 {
 	struct mmc_blk_data *md = mq->blkdata;
 	struct mmc_card *card = md->queue.card;
-	int ret = 0;
-
-	ret = mmc_flush_cache(card);
-	blk_end_request_all(req, ret ? BLK_STS_IOERR : BLK_STS_OK);
+        int ret = 0;
+        ret = mmc_flush_cache(card);
+        if (req->q->mq_ops)
+                mmc_blk_mq_end_request_all(req,
+                        ret ? BLK_STS_IOERR : BLK_STS_OK);
+        else
+                blk_end_request_all(req, ret ? BLK_STS_IOERR : BLK_STS_OK);
 }
 
 /*
@@ -2334,19 +2356,30 @@ static bool mmc_blk_rw_cmd_err(struct mmc_blk_data *md, struct mmc_card *card,
 		else
 			req_pending = blk_end_request(req, BLK_STS_OK, blocks << 9);
 	} else {
-		req_pending = blk_end_request(req, BLK_STS_OK, brq->data.bytes_xfered);
+                if (req->q->mq_ops)
+                        req_pending = mmc_blk_mq_end_request(req,
+                                BLK_STS_OK, brq->data.bytes_xfered);
+                else
+                        req_pending = blk_end_request(req,
+                                BLK_STS_OK, brq->data.bytes_xfered);
 	}
 	return req_pending;
 }
 
 static void mmc_blk_rw_cmd_abort(struct mmc_queue *mq, struct mmc_card *card,
-				 struct request *req,
-				 struct mmc_queue_req *mqrq)
+                                  struct request *req,
+                                  struct mmc_queue_req *mqrq)
 {
-	if (mmc_card_removed(card))
-		req->rq_flags |= RQF_QUIET;
-	while (blk_end_request(req, BLK_STS_IOERR, blk_rq_cur_bytes(req)));
-	atomic_dec(&mq->qcnt);
+        if (mmc_card_removed(card))
+                req->rq_flags |= RQF_QUIET;
+        if (req->q->mq_ops) {
+                while (mmc_blk_mq_end_request(req, BLK_STS_IOERR,
+                        blk_rq_cur_bytes(req)));
+        } else {
+                while (blk_end_request(req, BLK_STS_IOERR,
+                        blk_rq_cur_bytes(req)));
+        }
+        atomic_dec(&mq->qcnt);
 }
 
 /**
@@ -2365,7 +2398,10 @@ static void mmc_blk_rw_try_restart(struct mmc_queue *mq, struct request *req,
 	 */
 	if (mmc_card_removed(mq->card)) {
 		req->rq_flags |= RQF_QUIET;
-		blk_end_request_all(req, BLK_STS_IOERR);
+                if (req->q->mq_ops)
+                        mmc_blk_mq_end_request_all(req, BLK_STS_IOERR);
+                else
+                        blk_end_request_all(req, BLK_STS_IOERR);
 		atomic_dec(&mq->qcnt); /* FIXME: just set to 0? */
 		return;
 	}
@@ -2462,18 +2498,28 @@ static void mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *new_req)
 			mmc_blk_reset_success(md, type);
 
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
-			if (status == MMC_BLK_SUCCESS) {
-				req_pending = 0;
-				spin_lock_irq(&md->lock);
-				blk_complete_request(old_req);
-				spin_unlock_irq(&md->lock);
-			} else
+                        if (status == MMC_BLK_SUCCESS) {
+                                if (old_req->q->mq_ops) {
+                                        req_pending = mmc_blk_mq_end_request(old_req,
+                                                BLK_STS_OK,
+                                                brq->data.bytes_xfered);
+                                } else {
+                                        req_pending = 0;
+                                        spin_lock_irq(&md->lock);
+                                        blk_complete_request(old_req);
+                                        spin_unlock_irq(&md->lock);
+                                }
+                        } else
 #endif
 			{
-				req_pending = blk_end_request(old_req,
-						BLK_STS_OK,
-						      brq->data.bytes_xfered);
-			}
+                                if (old_req->q->mq_ops)
+                                        req_pending = mmc_blk_mq_end_request(old_req,
+                                                BLK_STS_OK,
+                                                brq->data.bytes_xfered);
+                                else
+                                        req_pending = blk_end_request(old_req,
+                                                BLK_STS_OK,
+                                                brq->data.bytes_xfered);
 
 			/*
 			 * If the blk_end_request function returns non-zero even
@@ -2544,8 +2590,14 @@ static void mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *new_req)
 			 * time, so we only reach here after trying to
 			 * read a single sector.
 			 */
-			req_pending = blk_end_request(old_req, BLK_STS_IOERR,
-						      brq->data.blksz);
+                        if (old_req->q->mq_ops)
+                                req_pending = mmc_blk_mq_end_request(old_req,
+                                        BLK_STS_IOERR,
+                                        brq->data.blksz);
+                        else
+                                req_pending = blk_end_request(old_req,
+                                        BLK_STS_IOERR,
+                                        brq->data.blksz);
 			if (!req_pending) {
 				atomic_dec(&mq->qcnt);
 				mmc_blk_rw_try_restart(mq, new_req, mqrq_cur);
@@ -2605,6 +2657,28 @@ bool mmc_blk_part_cmdq_en(struct mmc_queue *mq)
 #endif
 }
 
+
+#ifdef CONFIG_BLK_MQ
+static bool mmc_blk_mq_end_request(struct request *req,
+                                   blk_status_t error,
+                                   unsigned int nr_bytes)
+{
+        bool pending;
+
+        pending = blk_update_request(req, error, nr_bytes);
+        if (!pending)
+                __blk_mq_end_request(req, error);
+
+        return pending;
+}
+
+static void mmc_blk_mq_end_request_all(struct request *req,
+                                       blk_status_t error)
+{
+        mmc_blk_mq_end_request(req, error, blk_rq_bytes(req));
+}
+#endif
+
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
 int mmc_blk_end_queued_req(struct mmc_host *host,
 	struct mmc_async_req *areq_active, int index, int status)
@@ -2633,8 +2707,12 @@ int mmc_blk_end_queued_req(struct mmc_host *host,
 		 */
 		mmc_blk_reset_success(md, type);
 
-		ret = blk_end_request(req, 0,
-			brq->data.bytes_xfered);
+		if (req->q->mq_ops)
+			ret = mmc_blk_mq_end_request(req, BLK_STS_OK,
+				brq->data.bytes_xfered);
+		else
+			ret = blk_end_request(req, BLK_STS_OK,
+				brq->data.bytes_xfered);
 
 		mq->mqrq[index].req = NULL;
 		host->areq_que[index] = NULL;
@@ -2678,7 +2756,12 @@ int mmc_blk_end_queued_req(struct mmc_host *host,
 		 * read a single sector.
 		 */
 		spin_lock_irqsave(&md->lock, flags);
-		ret = __blk_end_request(req, BLK_STS_IOERR, brq->data.blksz);
+		if (req->q->mq_ops)
+			ret = mmc_blk_mq_end_request(req, BLK_STS_IOERR,
+				brq->data.blksz);
+		else
+			ret = __blk_end_request(req, BLK_STS_IOERR,
+				brq->data.blksz);
 		spin_unlock_irqrestore(&md->lock, flags);
 
 		mq->mqrq[index].req = NULL;
@@ -2715,11 +2798,15 @@ int mmc_blk_end_queued_req(struct mmc_host *host,
 
 cmd_abort:
 	spin_lock_irq(&md->lock);
-	if (mmc_card_removed(card))
-		req->cmd_flags |= RQF_QUIET;
-	while (ret)
-		ret = __blk_end_request(req, BLK_STS_IOERR,
-			blk_rq_cur_bytes(req));
+        if (req->q->mq_ops) {
+                while (ret)
+                        ret = mmc_blk_mq_end_request(req, BLK_STS_IOERR,
+                                blk_rq_cur_bytes(req));
+        } else {
+                while (ret)
+                        ret = __blk_end_request(req, BLK_STS_IOERR,
+                                blk_rq_cur_bytes(req));
+        }
 	spin_unlock_irq(&md->lock);
 
 	mq->mqrq[index].req = NULL;
@@ -2779,7 +2866,10 @@ void mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	ret = mmc_blk_part_switch(card, md->part_type);
 	if (ret) {
 		if (req) {
-			blk_end_request_all(req, BLK_STS_IOERR);
+                        if (req->q->mq_ops)
+                                mmc_blk_mq_end_request_all(req, BLK_STS_IOERR);
+                        else
+                                blk_end_request_all(req, BLK_STS_IOERR);
 		}
 
 		if (part_cmdq_en) {
