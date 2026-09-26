@@ -210,20 +210,53 @@ jobs:
 
           mkdir -p dtbo_build
 
-          cp out/arch/arm64/boot/dts/sprd/m168-overlay-pvt.dtbo \
-            dtbo_build/0x1900.dtbo
-
-          cp out/arch/arm64/boot/dts/sprd/m168-overlay-evt.dtbo \
-            dtbo_build/0x1901.dtbo
+          # Preserve original DTBO order:
+          # 0000 -> board_id 0x1902
+          # 0001 -> board_id 0x1901
+          # 0002 -> board_id 0x1900
+          # 0003 -> board_id 0x1903
 
           cp out/arch/arm64/boot/dts/sprd/m168-overlay-dvt.dtbo \
-            dtbo_build/0x1902.dtbo
+            dtbo_build/0000_6402.dtbo
+
+          cp out/arch/arm64/boot/dts/sprd/m168-overlay-evt.dtbo \
+            dtbo_build/0001_6401.dtbo
+
+          cp out/arch/arm64/boot/dts/sprd/m168-overlay-pvt.dtbo \
+            dtbo_build/0002_6400.dtbo
 
           cp out/arch/arm64/boot/dts/sprd/m168-overlay.dtbo \
-            dtbo_build/0x1903.dtbo
+            dtbo_build/0003_6403.dtbo
 
           echo "===== DTBO INPUT ====="
           ls -lh dtbo_build/
+
+      - name: Create DTBO Image
+        run: |
+          set -e
+
+          chmod +x tools/mkdtimg/mkdtimg
+          mkdir -p dtbo_output
+
+          tools/mkdtimg/mkdtimg create \
+            dtbo_output/dtbo.img \
+            --page_size=2048 \
+            dtbo_build/0000_6402.dtbo \
+              --id=0x1902 \
+              --rev=0x0 \
+            dtbo_build/0001_6401.dtbo \
+              --id=0x1901 \
+              --rev=0x0 \
+            dtbo_build/0002_6400.dtbo \
+              --id=0x1900 \
+              --rev=0x0 \
+            dtbo_build/0003_6403.dtbo \
+              --id=0x1903 \
+              --rev=0x0
+
+          echo "===== CREATED DTBO IMAGE ====="
+          ls -lh dtbo_output/dtbo.img
+          file dtbo_output/dtbo.img
 
       - name: Collect DTBS
         run: |
@@ -241,6 +274,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DTBS
-          path: |
-            dtbs_output/
-            dtbo_build/
+          path: dtbs_output/
+
+      - name: Upload DTBO Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: DTBO-IMG
+          path: dtbo_output/dtbo.img
