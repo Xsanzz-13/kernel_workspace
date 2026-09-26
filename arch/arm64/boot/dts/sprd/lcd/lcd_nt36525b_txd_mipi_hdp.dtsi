@@ -134,7 +134,7 @@
 						native-mode = <&nt36525b_timing0>;
 
 						nt36525b_timing0: timing0 {
-							clock-frequency = <108370000>;
+							clock-frequency = <96800000>;
 							hactive = <720>;
 							vactive = <1600>;
 							hback-porch = <60>;
