@@ -17,7 +17,7 @@
 					sprd,dsi-lane-number = <4>;
 					sprd,dsi-color-format = "rgb888";
 
-					sprd,phy-bit-clock = <748000>;	/* kbps */
+					sprd,phy-bit-clock = <660000>;	/* kbps */
 					sprd,phy-escape-clock = <20000>;/* kHz */
 					//sprd,power-gpio-delay = <20>;/* ms */
 
@@ -134,7 +134,7 @@
 						native-mode = <&nt36525b_timing0>;
 
 						nt36525b_timing0: timing0 {
-							clock-frequency = <108370000>;
+							clock-frequency = <96000000>;
 							hactive = <720>;
 							vactive = <1600>;
 							hback-porch = <60>;
