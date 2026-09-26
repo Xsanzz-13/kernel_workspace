@@ -56,6 +56,22 @@ jobs:
           clang --version
           gcc --version
 
+      - name: Inspect mkdtimg
+        run: |
+          chmod +x tools/mkdtimg/mkdtimg
+
+          echo "===== mkdtimg ====="
+          file tools/mkdtimg/mkdtimg
+          ldd tools/mkdtimg/mkdtimg || true
+
+          echo "===== HELP ====="
+          tools/mkdtimg/mkdtimg --help 2>&1 || true
+
+          echo "===== STRINGS ====="
+          strings tools/mkdtimg/mkdtimg | \
+            grep -iE 'usage|create|build|dtbo|page|entry|id|rev|custom' | \
+            head -100
+
       - name: Verify LibYAML
         run: |
           pkg-config --cflags yaml-0.1
