@@ -188,6 +188,18 @@ jobs:
             DTC_OVERLAY_TEST_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_apply_overlay" \
             DTC_OVERLAY_VTS_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" \
             dtbs
+            
+      - name: Inspect DTBO Board IDs
+        run: |
+          echo "===== DTBO BOARD IDS ====="
+
+          for f in out/arch/arm64/boot/dts/sprd/m168-overlay*.dtbo; do
+            echo
+            echo "===== $f ====="
+            dtc -I dtb -O dts "$f" 2>/dev/null | \
+              grep -E 'sprd,board_id|bootargs_ext|compatible' || true
+          done
+            
       - name: Collect DTBS
         run: |
           mkdir -p dtbs_output
