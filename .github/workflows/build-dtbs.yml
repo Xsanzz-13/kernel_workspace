@@ -65,7 +65,10 @@ jobs:
           ldd tools/mkdtimg/mkdtimg || true
 
           echo "===== HELP ====="
-          tools/mkdtimg/mkdtimg --help 2>&1 || true
+          tools/mkdtimg/mkdtimg help 2>&1 || true
+
+          echo "===== CREATE USAGE ====="
+          tools/mkdtimg/mkdtimg create 2>&1 || true
 
           echo "===== STRINGS ====="
           strings tools/mkdtimg/mkdtimg | \
@@ -120,12 +123,12 @@ jobs:
           echo "===== OVERLAY TOOLS ====="
           ls -l tools/mkdtimg/ufdt_apply_overlay
           ls -l tools/mkdtimg/ufdt_verify_overlay_host
-          
+
       - name: Fix Overlay Host Tools
         run: |
           chmod +x tools/mkdtimg/ufdt_apply_overlay
           chmod +x tools/mkdtimg/ufdt_verify_overlay_host
-          
+
           echo "===== libc++ ====="
           ls -lh /lib/x86_64-linux-gnu/libc++* || true
           ls -lh /usr/lib/x86_64-linux-gnu/libc++* || true
@@ -135,7 +138,7 @@ jobs:
 
           echo "===== NEEDED LIBRARIES ====="
           ldd tools/mkdtimg/ufdt_verify_overlay_host || true
-          
+
       - name: Fix libc++ Runtime
         run: |
           set -e
@@ -170,7 +173,7 @@ jobs:
           LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/tools/mkdtimg/lib:/usr/lib/llvm-14/lib" \
             "${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" \
             2>&1 || true
-            
+
       - name: Build DTBS
         run: |
           export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/tools/mkdtimg/lib:/usr/lib/llvm-14/lib:${LD_LIBRARY_PATH}"
@@ -188,7 +191,7 @@ jobs:
             DTC_OVERLAY_TEST_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_apply_overlay" \
             DTC_OVERLAY_VTS_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" \
             dtbs
-            
+
       - name: Inspect DTBO Board IDs
         run: |
           echo "===== DTBO BOARD IDS ====="
@@ -196,10 +199,32 @@ jobs:
           for f in out/arch/arm64/boot/dts/sprd/m168-overlay*.dtbo; do
             echo
             echo "===== $f ====="
+
             dtc -I dtb -O dts "$f" 2>/dev/null | \
               grep -E 'sprd,board_id|bootargs_ext|compatible' || true
           done
-            
+
+      - name: Prepare DTBO Image
+        run: |
+          set -e
+
+          mkdir -p dtbo_build
+
+          cp out/arch/arm64/boot/dts/sprd/m168-overlay-pvt.dtbo \
+            dtbo_build/0x1900.dtbo
+
+          cp out/arch/arm64/boot/dts/sprd/m168-overlay-evt.dtbo \
+            dtbo_build/0x1901.dtbo
+
+          cp out/arch/arm64/boot/dts/sprd/m168-overlay-dvt.dtbo \
+            dtbo_build/0x1902.dtbo
+
+          cp out/arch/arm64/boot/dts/sprd/m168-overlay.dtbo \
+            dtbo_build/0x1903.dtbo
+
+          echo "===== DTBO INPUT ====="
+          ls -lh dtbo_build/
+
       - name: Collect DTBS
         run: |
           mkdir -p dtbs_output
@@ -216,4 +241,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DTBS
-          path: dtbs_output/
+          path: |
+            dtbs_output/
+            dtbo_build/
