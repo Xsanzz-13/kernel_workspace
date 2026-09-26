@@ -258,26 +258,6 @@ jobs:
           ls -lh dtbo_output/dtbo.img
           file dtbo_output/dtbo.img
 
-      - name: Validate DTBO Image
-        run: |
-          set -e
-
-          echo "===== DTBO IMAGE INFO ====="
-          ls -l dtbo_output/dtbo.img
-          file dtbo_output/dtbo.img
-
-          echo
-          echo "===== MKDTIMG DUMP ====="
-          tools/mkdtimg/mkdtimg dump dtbo_output/dtbo.img 2>&1 || true
-
-          echo
-          echo "===== MKDTIMG DUMP HELP ====="
-          tools/mkdtimg/mkdtimg help dump 2>&1 || true
-
-          echo
-          echo "===== SHA256 ====="
-          sha256sum dtbo_output/dtbo.img
-
       - name: Extract And Validate DTBO Entries
         run: |
           set -e
@@ -298,9 +278,9 @@ jobs:
             file "$f"
 
             dtc -I dtb -O dts "$f" 2>/dev/null | \
-              grep -E 'sprd,board_id|bootargs_ext|compatible' || true
+              grep -E 'sprd,board_id|bootargs_ext|compatible|sprd,phy-bit-clock|clock-frequency' || true
           done
-
+          
       - name: Collect DTBS
         run: |
           mkdir -p dtbs_output
