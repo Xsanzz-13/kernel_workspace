@@ -278,6 +278,29 @@ jobs:
           echo "===== SHA256 ====="
           sha256sum dtbo_output/dtbo.img
 
+      - name: Extract And Validate DTBO Entries
+        run: |
+          set -e
+
+          rm -rf dtbo_verify
+          mkdir -p dtbo_verify
+
+          tools/mkdtimg/mkdtimg dump \
+            dtbo_output/dtbo.img \
+            -b dtbo_verify/entry
+
+          echo "===== EXTRACTED ENTRIES ====="
+          ls -lh dtbo_verify/
+
+          for f in dtbo_verify/entry.*; do
+            echo
+            echo "===== $f ====="
+            file "$f"
+
+            dtc -I dtb -O dts "$f" 2>/dev/null | \
+              grep -E 'sprd,board_id|bootargs_ext|compatible' || true
+          done
+
       - name: Collect DTBS
         run: |
           mkdir -p dtbs_output
