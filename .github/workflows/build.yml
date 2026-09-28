@@ -11,15 +11,28 @@ jobs:
       - name: Checkout Source Kernel
         uses: actions/checkout@v4
 
-      - name: Test KSU Next Integration
+      - name: Inspect Current KernelSU Integration
         run: |
-          curl -L \
-            "https://github.com/IverCoder/android_kernel_samsung_a3core/commit/81da2968a777556d20847e30b618658905af67a3.patch" \
-            -o /tmp/ksu-next-a3core.patch
+          echo "===== drivers/kernelsu ====="
+          ls -la drivers/kernelsu || true
 
-          echo "[+] Checking KSU Next patch..."
-          git apply --check /tmp/ksu-next-a3core.patch
+          echo ""
+          echo "===== drivers/Kconfig KSU ====="
+          grep -n -C 3 -i "kernelsu\|CONFIG_KSU" drivers/Kconfig || true
 
+          echo ""
+          echo "===== drivers/Makefile KSU ====="
+          grep -n -C 3 -i "kernelsu" drivers/Makefile || true
+
+          echo ""
+          echo "===== defconfig KSU ====="
+          grep -n -C 3 -i "CONFIG_KSU\|KPROBE" \
+            arch/arm64/configs/a3core_eur_open_defconfig || true
+
+          echo ""
+          echo "===== fs/open.c KSU ====="
+          grep -n -C 4 -i "ksu_" fs/open.c || true
+          
       - name: Ubah Default Shell ke Bash
         run: |
           sudo ln -sf /bin/bash /bin/sh
