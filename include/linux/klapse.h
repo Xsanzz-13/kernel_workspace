@@ -28,7 +28,7 @@ extern void sprd_dpu_klapse_uninit(void);
 #endif
 
 /* Constants - Customize as needed */
-#define DEFAULT_ENABLE 0 /* 0 = off, 1 = time-based, 2 = brightness-based */
+#define DEFAULT_ENABLE 1 /* 0 = off, 1 = time-based, 2 = brightness-based */
 
 #define MAX_SCALE 256 /* Maximum value of RGB possible */
 
