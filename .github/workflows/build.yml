@@ -11,27 +11,31 @@ jobs:
       - name: Checkout Source Kernel
         uses: actions/checkout@v4
 
-      - name: Inspect Current KernelSU Integration
+      - name: Inspect KernelSU Source
         run: |
-          echo "===== drivers/kernelsu ====="
-          ls -la drivers/kernelsu || true
+          echo "===== KernelSU directory ====="
+          ls -la KernelSU || true
+          ls -la KernelSU/kernel || true
 
           echo ""
-          echo "===== drivers/Kconfig KSU ====="
-          grep -n -C 3 -i "kernelsu\|CONFIG_KSU" drivers/Kconfig || true
+          echo "===== KernelSU git info ====="
+          cd KernelSU
+          git remote -v || true
+          git log -1 --oneline || true
+          git status --short || true
+          cd ..
 
           echo ""
-          echo "===== drivers/Makefile KSU ====="
-          grep -n -C 3 -i "kernelsu" drivers/Makefile || true
+          echo "===== KernelSU kernel files ====="
+          find KernelSU/kernel -maxdepth 2 -type f | sort | head -100
 
           echo ""
-          echo "===== defconfig KSU ====="
-          grep -n -C 3 -i "CONFIG_KSU\|KPROBE" \
-            arch/arm64/configs/a3core_eur_open_defconfig || true
+          echo "===== KernelSU Kconfig ====="
+          sed -n '1,240p' KernelSU/kernel/Kconfig 2>/dev/null || true
 
           echo ""
-          echo "===== fs/open.c KSU ====="
-          grep -n -C 4 -i "ksu_" fs/open.c || true
+          echo "===== KernelSU Makefile ====="
+          sed -n '1,200p' KernelSU/kernel/Makefile 2>/dev/null || true
           
       - name: Ubah Default Shell ke Bash
         run: |
