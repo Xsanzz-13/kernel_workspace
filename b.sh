@@ -17,11 +17,12 @@ export DEFCONFIG="a3core_eur_open_defconfig"
 # ==========================================
 # TAHAP 1: KSU Integration
 # ==========================================
-echo "[+] Mengintegrasikan KernelSU..."
-cd $KERNEL_ROOT
-curl -LSs "https://raw.githubusercontent.com/backslashxx/KernelSU/master/kernel/setup.sh" | bash
-find KernelSU -name ".git" -exec rm -rf {} + || true
-
+echo "[+] Menggunakan KernelSU Next v1.0.8..."
+cd "$KERNEL_ROOT"
+test -f "$KERNEL_ROOT/KernelSU-Next/kernel/Kconfig" || { echo "[!] KernelSU Next source tidak ditemukan"; exit 1; }
+test -L "$KERNEL_ROOT/drivers/kernelsu" || { echo "[!] drivers/kernelsu bukan symlink"; exit 1; }
+[ "$(readlink "$KERNEL_ROOT/drivers/kernelsu")" = "../KernelSU-Next/kernel" ] || { echo "[!] Symlink drivers/kernelsu salah"; exit 1; }
+echo "[+] KernelSU Next v1.0.8 siap"
 # ==========================================
 # TAHAP 2: Extract Kernel Component
 # ==========================================
