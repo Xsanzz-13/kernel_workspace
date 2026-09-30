@@ -15,8 +15,6 @@ static inline struct mmc_queue_req *req_to_mmc_queue_req(struct request *rq)
 	return blk_mq_rq_to_pdu(rq);
 }
 
-
-
 struct task_struct;
 struct mmc_blk_data;
 struct mmc_blk_ioc_data;
@@ -53,9 +51,7 @@ enum mmc_drv_op {
 };
 
 struct mmc_queue_req {
-#if defined(CONFIG_EMMC_SOFTWARE_CQ_SUPPORT)
 	struct request		*req;
-#endif
 	struct mmc_blk_request	brq;
 	struct scatterlist	*sg;
 	struct mmc_async_req	areq;
@@ -67,11 +63,11 @@ struct mmc_queue_req {
 	atomic_t		index;
 #endif
 };
+
 static inline struct request *mmc_queue_req_to_req(struct mmc_queue_req *mqr)
 {
-        return mqr->req;
+	return mqr->req;
 }
-
 
 struct mmc_queue {
 	struct mmc_card		*card;
@@ -81,11 +77,11 @@ struct mmc_queue {
 	bool			asleep;
 	struct mmc_blk_data	*blkdata;
 	struct request_queue	*queue;
-        struct blk_mq_tag_set     tag_set;
-        bool                      use_blk_mq;
-        struct list_head          pending;
-        spinlock_t                pending_lock;
-        wait_queue_head_t         pending_wait;
+	struct blk_mq_tag_set	tag_set;
+	bool			use_blk_mq;
+	struct list_head	pending;
+	spinlock_t		pending_lock;
+	wait_queue_head_t	pending_wait;
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
 	struct mmc_queue_req	mqrq[EMMC_MAX_QUEUE_DEPTH];
 #endif
@@ -102,6 +98,7 @@ struct mmc_queue {
 #define IS_RT_CLASS_REQ(x)	\
 	(IOPRIO_PRIO_CLASS(req_get_ioprio(x)) == IOPRIO_CLASS_RT)
 #endif
+
 extern int mmc_init_queue(struct mmc_queue *, struct mmc_card *, spinlock_t *,
 			  const char *, int);
 extern void mmc_cleanup_queue(struct mmc_queue *);
