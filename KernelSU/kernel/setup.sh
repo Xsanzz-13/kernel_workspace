@@ -45,7 +45,7 @@ setup_kernelsu() {
     if [ "$(git status | grep -Po 'v\d+(\.\d+)*' | head -n1)" ]; then
         git checkout main && echo "[-] Switched to main branch."
     fi
-    git pull && echo "[+] Repository updated."
+    
     if [ -z "${1-}" ]; then
         git checkout "$(git describe --abbrev=0 --tags)" && echo "[-] Checked out latest tag."
     else
