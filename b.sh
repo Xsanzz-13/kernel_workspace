@@ -18,9 +18,26 @@ export DEFCONFIG="a3core_eur_open_defconfig"
 # TAHAP 1: KSU Integration
 # ==========================================
 echo "[+] Mengintegrasikan KernelSU..."
-cd $KERNEL_ROOT
-curl -LSs "https://raw.githubusercontent.com/backslashxx/KernelSU/master/kernel/setup.sh" | bash
-find KernelSU -name ".git" -exec rm -rf {} + || true
+cd "$KERNEL_ROOT"
+
+KSU_REPO="https://github.com/tiann/KernelSU.git"
+KSU_REF="0e4dafc"
+
+if [ ! -d "$KERNEL_ROOT/KernelSU/.git" ]; then
+    rm -rf "$KERNEL_ROOT/KernelSU"
+    git clone "$KSU_REPO" "$KERNEL_ROOT/KernelSU"
+fi
+
+cd "$KERNEL_ROOT/KernelSU"
+git fetch --all --tags --force
+git checkout --force "$KSU_REF"
+
+echo "[+] KernelSU pinned:"
+echo "    Version : v3.2.4"
+echo "    Manager : 32457"
+echo "    Commit  : $(git rev-parse HEAD)"
+
+cd "$KERNEL_ROOT"
 
 # ==========================================
 # TAHAP 2: Extract Kernel Component
