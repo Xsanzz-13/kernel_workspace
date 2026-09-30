@@ -96,18 +96,19 @@ static int mmc_mq_init_request(struct blk_mq_tag_set *set,
 }
 
 static void mmc_mq_exit_request(struct blk_mq_tag_set *set,
-                                struct request *req,
-                                unsigned int hctx_idx)
+				struct request *req,
+				unsigned int hctx_idx)
 {
-        struct mmc_queue_req *mq_rq = blk_mq_rq_to_pdu(req);
-        struct mmc_queue *mq = container_of(set, struct mmc_queue, tag_set);
+	struct mmc_queue_req *mq_rq = blk_mq_rq_to_pdu(req);
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
-        if (mmc_blk_part_cmdq_en(mq))
-                return;
+	struct mmc_queue *mq = container_of(set, struct mmc_queue, tag_set);
+
+	if (mmc_blk_part_cmdq_en(mq))
+		return;
 #endif
 
-        kfree(mq_rq->sg);
-        mq_rq->sg = NULL;
+	kfree(mq_rq->sg);
+	mq_rq->sg = NULL;
 }
 
 static const struct blk_mq_ops mmc_mq_ops = {
