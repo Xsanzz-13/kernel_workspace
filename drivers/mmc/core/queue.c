@@ -417,11 +417,13 @@ static void mmc_mq_exit_request(struct blk_mq_tag_set *set,
 				struct request *req,
 				unsigned int hctx_idx)
 {
-	struct mmc_queue_req *mq_rq = blk_mq_rq_to_pdu(req);
+static void mmc_exit_request(struct request_queue *q, struct request *req)
+{
+	struct mmc_queue_req *mq_rq = req_to_mmc_queue_req(req);
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
-	struct mmc_queue *mq = container_of(set, struct mmc_queue, tag_set);
-
-	if (mmc_blk_part_cmdq_en(mq))
+	/* cmdq use preallocate sg buffer */
+	if (q->queuedata &&
+		mmc_blk_part_cmdq_en(q->queuedata))
 		return;
 #endif
 
