@@ -267,9 +267,10 @@ struct mmc_context_info {
 	wait_queue_head_t	wait;
 };
 
+#define EMMC_MAX_QUEUE_DEPTH            (32)
+
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
-#define EMMC_MAX_QUEUE_DEPTH		(32)
-#define EMMC_MIN_RT_CLASS_TAG_COUNT	(4)
+#define EMMC_MIN_RT_CLASS_TAG_COUNT     (4)
 #endif
 
 struct regulator;
