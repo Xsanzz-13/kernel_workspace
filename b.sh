@@ -20,24 +20,40 @@ export DEFCONFIG="a3core_eur_open_defconfig"
 echo "[+] Mengintegrasikan KernelSU..."
 cd "$KERNEL_ROOT"
 
-KSU_REPO="https://github.com/tiann/KernelSU.git"
-KSU_REF="0e4dafc"
+if [ -d "$KERNEL_ROOT/KernelSU" ]; then
+    echo "[+] KernelSU dari source terdeteksi, menggunakan source dari repository kernel."
+else
+    KSU_REPO="https://github.com/tiann/KernelSU.git"
+    KSU_REF="0e4dafc"
 
-if [ ! -d "$KERNEL_ROOT/KernelSU/.git" ]; then
-    rm -rf "$KERNEL_ROOT/KernelSU"
     git clone "$KSU_REPO" "$KERNEL_ROOT/KernelSU"
+
+    cd "$KERNEL_ROOT/KernelSU"
+    git fetch --all --tags --force
+    git checkout --force "$KSU_REF"
+
+    echo "[+] KernelSU pinned:"
+    echo "    Version : v3.2.4"
+    echo "    Manager : 32457"
+    echo "    Commit  : $(git rev-parse HEAD)"
+
+    cd "$KERNEL_ROOT"
 fi
 
-cd "$KERNEL_ROOT/KernelSU"
-git fetch --all --tags --force
-git checkout --force "$KSU_REF"
+echo "[+] KernelSU source check:"
+echo "    Path: $KERNEL_ROOT/KernelSU"
 
-echo "[+] KernelSU pinned:"
-echo "    Version : v3.2.4"
-echo "    Manager : 32457"
-echo "    Commit  : $(git rev-parse HEAD)"
+if [ -d "$KERNEL_ROOT/KernelSU" ]; then
+    if [ -d "$KERNEL_ROOT/KernelSU/.git" ]; then
+        echo "    Git: repository"
+        echo "    Commit: $(git -C "$KERNEL_ROOT/KernelSU" rev-parse HEAD)"
+    else
+        echo "    Git: donor tree (no nested .git)"
+    fi
 
-cd "$KERNEL_ROOT"
+    echo "    syscall_fn_t references:"
+    grep -R "syscall_fn_t" "$KERNEL_ROOT/KernelSU" 2>/dev/null | head -10 || true
+fi
 
 # ==========================================
 # TAHAP 2: Extract Kernel Component
