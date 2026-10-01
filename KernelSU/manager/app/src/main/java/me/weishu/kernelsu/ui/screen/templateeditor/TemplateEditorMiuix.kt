@@ -228,8 +228,8 @@ private fun TextEdit(
     val editText = remember(text) { mutableStateOf(text) }
     EditText(
         title = label.uppercase(),
-        value = editText.value,
-        onValueChange = { newText ->
+        textValue = editText,
+        onTextValueChange = { newText ->
             editText.value = newText
             onValueChange(newText)
         },

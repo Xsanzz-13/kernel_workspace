@@ -1,7 +1,7 @@
 menu "KernelSU"
 
 config KSU
-	tristate "KernelSU function support"
+	bool "KernelSU function support"
 	depends on !CPU_BIG_ENDIAN
 	depends on SECURITY_SELINUX
 	select SECCOMP
@@ -9,9 +9,16 @@ config KSU
 	help
 	  Enable kernel-level root privileges on Android System.
 
+config KSU_EXTRAS
+	bool "Enable custom stuff"
+	depends on KSU
+	default n
+	help
+	  Custom extensions. Experimental.
+	  Currently, only avc log spoofing is implemented.
+
 config KSU_KPROBES_KSUD
 	bool "Enable dynamic kprobes for early boot hooks"
-	depends on KSU
 	depends on KPROBES && KRETPROBES
 	default y
 	help
@@ -19,33 +26,15 @@ config KSU_KPROBES_KSUD
 	  on early boot. Hooks are unregistered at boot complete
 	  to reduce overhead.
 
-config KSU_HACK_ARM64_BRANCH_LINK
-	bool "EXPERIMENTAL: inline call-site hijacking (ARM64 bl insn)"
-	depends on KSU
-	depends on ARM64 && KALLSYMS
-	depends on !KSU_TAMPER_SYSCALL_TABLE
-	default n
-	help
-	  EXPERIMENTAL: provides sucompat by patching callsites, scanning kernel text and 
-	  patching bl (branch-with-link) insn. This routes calls into our custom functions
-	  without the need for trampolines. Theory comes from ARM64 optprobes on lkml.
-	  If branch link hooking fails, it will opt to tamper syscall table for the symbol.
-	  KPROBES is recommended for faster symbol resolution. NOT usable for pre-4.17 kernels.
-	  For those, please use KSU_TAMPER_SYSCALL_TABLE. Verified on 4.19/5.4 GKI1, 5.10~6.12 GKI2.
-
 config KSU_TAMPER_SYSCALL_TABLE
-	bool "tamper sys_call_table for sucompat + sys_reboot"
-	depends on KSU
-	depends on (ARM || ARM64)
-	default y if KSU = m
+	bool "EXPERIMENTAL: tamper sys_call_table for sucompat + sys_reboot"
+	depends on (ARM || ARM64) && !CFI_CLANG && !CFI
 	default n
 	help
-	  Use a high-performance syscall table hijacking method demonstrated on zx2c4's
+	  EXPERIMENTAL: use syscall table hijacking method demonstrated on zx2c4's
 	  kernel-assisted-superuser. Replaces sys_reboot, sys_execve, sys_newfstatat,
-	  sys_faccessat, sys_newfstat_ret.
-	  As syscalls are called directly, it avoids indirect branch (blr) overhead and
-	  complies with Clang CFI.
-	  Verified on 3.0 ~ 6.12.
+	  sys_faccessat, sys_newfstat_ret manual hooks.
+	  Personally tested on Linux 3.10 ~ 4.14, aarch64.
 
 config KSU_FEATURE_SULOG
 	bool "KernelSU SU Logging feature"
@@ -70,7 +59,6 @@ config KSU_DEBUG
 
 config KSU_THRONE_TRACKER_ALWAYS_THREADED
 	bool "Always run throne tracker in a kthread"
-	depends on KSU
 	default n
 	help
 	  Enable this option to run throne tracker in a kthread for the first
@@ -80,15 +68,10 @@ config KSU_THRONE_TRACKER_ALWAYS_THREADED
 
 config KSU_LSM_SECURITY_HOOKS
 	bool "Use LSM security hooks"
-	depends on KSU
-	default y
+        depends on KSU
+        default y
 	help
-	  Disabling this is mostly useful for non-ARM64 with kernel > 6.8.
+	  Disabling this is mostly useful for kernel > 6.8.
 	  Make sure to implement manual hooks on security/security.c.
-
-config KSU_HEURISTIC_IN_TREE_BUILD
-	bool "heuristic. do NOT touch"
-	depends on KSU
-	default y
 
 endmenu

@@ -5,7 +5,6 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -13,14 +12,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.dropUnlessResumed
-import kotlinx.coroutines.launch
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.getKernelVersion
 import me.weishu.kernelsu.ui.LocalUiMode
@@ -41,10 +37,6 @@ import me.weishu.kernelsu.ui.util.rootAvailable
 fun InstallScreen() {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
-    val snackbarHost = remember { SnackbarHostState() }
-    val uiMode = LocalUiMode.current
-    val scope = rememberCoroutineScope()
-    val resources = LocalResources.current
 
     var installMethod by rememberSaveable { mutableStateOf<InstallMethod?>(null) }
     var lkmSelection by rememberSaveable { mutableStateOf<LkmSelection>(LkmSelection.KmiNone) }
@@ -54,7 +46,6 @@ fun InstallScreen() {
     var advancedOptionsShown by rememberSaveable { mutableStateOf(false) }
     var allowShell by rememberSaveable { mutableStateOf(false) }
     var enableAdb by rememberSaveable { mutableStateOf(false) }
-    var forceBackup by rememberSaveable { mutableStateOf(false) }
 
     val currentKmi by produceState(initialValue = "") { value = getCurrentKmi() }
     val partitions by produceState(initialValue = emptyList()) { value = getAvailablePartitions() }
@@ -94,16 +85,6 @@ fun InstallScreen() {
         partitions.map { name -> if (defaultPartition == name) "$name (default)" else name }
     }
 
-    fun showMessage(message: String) {
-        scope.launch {
-            if (uiMode == UiMode.Material) {
-                snackbarHost.showSnackbar(message)
-            } else {
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
     val onInstall = {
         installMethod?.let { method ->
             navigator.push(
@@ -115,7 +96,6 @@ fun InstallScreen() {
                         partition = partitions.getOrNull(partitionSelectionIndex),
                         allowShell = allowShell,
                         enableAdb = enableAdb,
-                        backup = method is InstallMethod.SelectFile && forceBackup
                     )
                 )
             )
@@ -142,7 +122,7 @@ fun InstallScreen() {
                     lkmSelection = LkmSelection.LkmUri(uri)
                 } else {
                     lkmSelection = LkmSelection.KmiNone
-                    showMessage(resources.getString(R.string.install_only_support_ko_file))
+                    Toast.makeText(context, R.string.install_only_support_ko_file, Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -169,8 +149,6 @@ fun InstallScreen() {
         advancedOptionsShown = advancedOptionsShown,
         allowShell = allowShell,
         enableAdb = enableAdb,
-        forceBackup = forceBackup,
-        canForceBackup = installMethod is InstallMethod.SelectFile,
     )
     val actions = InstallScreenActions(
         onBack = dropUnlessResumed { navigator.pop() },
@@ -205,13 +183,10 @@ fun InstallScreen() {
         onSelectEnableAdb = {
             enableAdb = it
         },
-        onSelectForceBackup = {
-            forceBackup = it
-        }
     )
 
     when (LocalUiMode.current) {
         UiMode.Miuix -> InstallScreenMiuix(state, actions)
-        UiMode.Material -> InstallScreenMaterial(state, actions, snackbarHost)
+        UiMode.Material -> InstallScreenMaterial(state, actions)
     }
 }

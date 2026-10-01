@@ -17,14 +17,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -44,6 +43,7 @@ import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.BuildConfig
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.dialog.rememberLoadingDialog
+import me.weishu.kernelsu.ui.util.LocalSnackbarHost
 import me.weishu.kernelsu.ui.util.getBugreportFile
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -56,18 +56,17 @@ private tailrec fun Context.findComponentActivity(): ComponentActivity? {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SendLogBottomSheet(
-    onDismiss: () -> Unit,
-    snackbarHostState: SnackbarHostState,
-) {
+fun SendLogBottomSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val activity = context.findComponentActivity()
     val logSaved = stringResource(R.string.log_saved)
     val sendLog = stringResource(R.string.send_log)
+    val snackBarHost = LocalSnackbarHost.current
     val loadingDialog = rememberLoadingDialog()
     val haptic = LocalHapticFeedback.current
-    val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden)
+    val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
     val dismiss = {
         scope.launch { sheetState.hide() }
@@ -96,8 +95,8 @@ fun SendLogBottomSheet(
                 loadingDialog.hide()
             }
             dismiss()
-            snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(logSaved)
+            snackBarHost.currentSnackbarData?.dismiss()
+            snackBarHost.showSnackbar(logSaved)
         }
     }
     ModalBottomSheet(

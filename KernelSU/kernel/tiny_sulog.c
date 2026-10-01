@@ -1,16 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (C) 2026 \xx
- *
- * This file is a downstream extension and NOT affiliated, endorsed by,
- * or maintained by the official KernelSU developers.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- */
-
 // half assed ringbuffer
 // 8 bytes
 struct sulog_entry {
@@ -24,7 +11,7 @@ struct sulog_entry {
 static void *sulog_buf_ptr = NULL;
 static uint8_t sulog_index_next = 0;
 
-static DEFINE_MUTEX(sulog_lock);
+static DEFINE_SPINLOCK(sulog_lock);
 
 static void tiny_sulog_init_heap()
 {
@@ -66,6 +53,7 @@ static void write_sulog(uint8_t sym)
 	if (!sulog_buf_ptr)
 		return;
 
+	unsigned int offset = sulog_index_next * sizeof(struct sulog_entry);
 	struct sulog_entry entry = {0};
 
 	// WARNING!!! this is LE only!
@@ -76,9 +64,7 @@ static void write_sulog(uint8_t sym)
 	// we can perform this write atomic on 64-bit
 	// however this still has to be locked for exclusion as theres a reader
 
-	mutex_lock(&sulog_lock);
-
-	unsigned int offset = sulog_index_next * sizeof(struct sulog_entry);
+	spin_lock(&sulog_lock);
 
 #ifdef CONFIG_64BIT
 	*(volatile uint64_t *)(sulog_buf_ptr + offset) = *(uint64_t *)&entry;
@@ -92,7 +78,7 @@ static void write_sulog(uint8_t sym)
 	if (sulog_index_next >= SULOG_ENTRY_MAX)
 		sulog_index_next = 0;
 
-	mutex_unlock(&sulog_lock);
+	spin_unlock(&sulog_lock);
 
 	return;
 }
@@ -123,21 +109,17 @@ static int send_sulog_dump(void __user *uptr)
 	if (copy_to_user((void __user *)(uintptr_t)sbuf.uptime_ptr, &uptime, sizeof(uptime) ))
 		return 1;
 
-	mutex_lock(&sulog_lock);
-
 	// send index
-	if (copy_to_user((void __user *)(uintptr_t)sbuf.index_ptr, &sulog_index_next, sizeof(sulog_index_next) )) {
-		mutex_unlock(&sulog_lock);
+	if (copy_to_user((void __user *)(uintptr_t)sbuf.index_ptr, &sulog_index_next, sizeof(sulog_index_next) ))
 		return 1;
-	}
 
 	// send buffer data
+	spin_lock(&sulog_lock);
 	if (copy_to_user((void __user *)(uintptr_t)sbuf.buf_ptr, sulog_buf_ptr, SULOG_BUFSIZ )) {
-		mutex_unlock(&sulog_lock);
+		spin_unlock(&sulog_lock);
 		return 1;
 	}
-
-	mutex_unlock(&sulog_lock);
+	spin_unlock(&sulog_lock);
 
 	return 0;
 }

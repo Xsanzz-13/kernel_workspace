@@ -50,7 +50,7 @@ fun SwitchItem(
         },
         supportingContent = {
             if (summary != null) {
-                Text(summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(summary, color = MaterialTheme.colorScheme.outline)
             }
         }
     )

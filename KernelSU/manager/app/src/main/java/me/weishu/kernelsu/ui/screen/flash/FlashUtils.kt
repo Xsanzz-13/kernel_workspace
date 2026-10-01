@@ -1,10 +1,12 @@
 package me.weishu.kernelsu.ui.screen.flash
 
+import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.Parcelable
+import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Adb
 import androidx.compose.material.icons.rounded.DeleteForever
@@ -39,7 +41,6 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.time.Duration.Companion.milliseconds
 
 enum class FlashingStatus {
     FLASHING,
@@ -76,7 +77,6 @@ sealed class FlashIt : Parcelable {
         val partition: String? = null,
         val allowShell: Boolean = false,
         val enableAdb: Boolean = false,
-        val backup: Boolean = false,
     ) : FlashIt()
 
     @Parcelize
@@ -117,7 +117,6 @@ fun flashIt(
             flashIt.partition,
             flashIt.allowShell,
             flashIt.enableAdb,
-            flashIt.backup,
             onStdout,
             onStderr
         )
@@ -185,8 +184,8 @@ fun FlashEffect(
 
 fun saveLog(
     logContent: StringBuilder,
-    scope: CoroutineScope,
-    showMessage: (String) -> Unit
+    context: Context,
+    scope: CoroutineScope
 ): () -> Unit {
     return {
         scope.launch {
@@ -197,7 +196,7 @@ fun saveLog(
                 "KernelSU_install_log_${date}.log"
             )
             file.writeText(logContent.toString())
-            showMessage("Log saved to ${file.absolutePath}")
+            Toast.makeText(context, "Log saved to ${file.absolutePath}", Toast.LENGTH_SHORT).show()
         }
     }
 }
@@ -213,7 +212,7 @@ fun JailbreakFlashWarningDialog(
 
     LaunchedEffect(Unit) {
         while (countdown > 0) {
-            delay(1000.milliseconds)
+            delay(1000)
             countdown--
         }
     }

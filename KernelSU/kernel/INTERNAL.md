@@ -2,16 +2,15 @@
 
 ## hooking
 - prefer syscalls and LSM always
-- syscall table hooking is implemented
+- syscall table hooking is implemented but only for !CFI
 - on legacy theres no kprobes/kretprobes and syscall tracepoint guarantees
 - theres no guarantee for kallsyms even!
 - lots have random backports left and right, theres no abi stability guarantee at all!
 - theres partial kp/rp support on boot-time hooks
-- theres also experimental ARM64 bl insn inline hooking support. Recommended for GKI.
 
 ## sucompat
 - tweaked for downstream
-- simd-like, last word first, per word compare
+- last word first, per word compare, this is faster
 - sucompat gate is tweaked too
 
 ## task_fix_setuid LSM
@@ -43,10 +42,6 @@
 - lockless argv pullouts for sulog
 - might be used for something later
 
-## selinux_hide
-- we have a thin implementation downstream
-- no kallsyms reliance, we hunt file operations instead, we try to keep this if possible.
-
 ## safe mode
 - the implementation accepts 3x VOLUME_UP or 3x VOLUNE_DOWN to trigger safemode
 - we have a dedicated input handler for this
@@ -59,7 +54,7 @@
 - causes heavy inlining (high stack overflow risk)
 - ensure inlining control (inline, noinline attributes)
 - stack safety is disabled
-- redefines str/mem fn's to builtins
+- redefines str/mem fn's to builtins if !FORTIFY_SOURCE
 
 ## compat handling
 - always redefine/override if possible
@@ -67,7 +62,8 @@
 - if easy, backport newer kernel fn/macro's as is, then redefine.
 - if hard, mimic what it does then redefine. as long as it works it is good enough.
 - lots of casting hacks / type punning / void* / void** abuse are used
-- kernel_compat.h holds most compat handling / hacks
+- kernel_compat.h for small functions
+- kernel_compat.c for big functions marked __weak and tagged with extern on callee site
 
 ## kthreads
 - theres a lot of these on the codebase even for mundane tasks
@@ -76,7 +72,7 @@
 ## hacks
 #### sleeping on spinlocks
 - on apply_kernelsu_rules and handle_sepolicy
-- pin task to x cpu, hold rwlock, enable preempt, apply rules, do the reverse.
+- pin task to x cpu, hold rwlock, enable preempt, jack priority, apply rules, do the reverse.
 #### pointers
 - this is C, theres tons of pointer hacks around.
 - im not pinpointing everything
@@ -92,10 +88,4 @@
 #### toolkit's uname hax
 - since we pass arg as reference of arg on sys_reboot
 - this is actually void * const char __user * const char __user *
-
-## log / reminders
-- some kernels reads 'cold + noinline' as __init, which evicts our fn. avoid this combination.
-- some kernels have autistic inlining which also fucks up if we ever wanted to \__\attribute__((flatten)) (e.g. sultan and other 'optimization')
-- c99 restrict is usable, however, we only use this on hot paths where it makes sense.
-
 

@@ -2,12 +2,10 @@ package me.weishu.kernelsu.ui.component.rebootlistpopup
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material3.DropdownMenuGroup
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.DropdownMenuPopup
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,13 +19,10 @@ import me.weishu.kernelsu.ui.util.reboot
 
 @Composable
 fun RebootDropdownItems(onItemClick: (String) -> Unit) {
-    val options = getRebootListOption()
-    options.forEachIndexed { index, option ->
+    getRebootListOption().forEach { option ->
         DropdownMenuItem(
-            selected = false,
-            onClick = { onItemClick(option.reason) },
             text = { Text("  " + stringResource(option.labelRes)) },
-            shapes = MenuDefaults.itemShape(index = index, count = options.size),
+            onClick = { onItemClick(option.reason) }
         )
     }
 }
@@ -44,15 +39,13 @@ fun RebootListPopupMaterial() {
             )
         }
 
-        DropdownMenuPopup(
+        DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            DropdownMenuGroup(shapes = MenuDefaults.groupShapes()) {
-                RebootDropdownItems { reason ->
-                    expanded = false
-                    reboot(reason)
-                }
+            RebootDropdownItems { reason ->
+                expanded = false
+                reboot(reason)
             }
         }
     }

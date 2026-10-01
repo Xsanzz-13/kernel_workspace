@@ -16,8 +16,6 @@ internal data class InstallUiState(
     val advancedOptionsShown: Boolean,
     val allowShell: Boolean,
     val enableAdb: Boolean,
-    val forceBackup: Boolean,
-    val canForceBackup: Boolean,
 )
 
 @Immutable
@@ -32,5 +30,4 @@ internal data class InstallScreenActions(
     val onAdvancedOptionsClicked: () -> Unit,
     val onSelectAllowShell: (Boolean) -> Unit,
     val onSelectEnableAdb: (Boolean) -> Unit,
-    val onSelectForceBackup: (Boolean) -> Unit,
 )

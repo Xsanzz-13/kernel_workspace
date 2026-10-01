@@ -61,8 +61,6 @@ import me.weishu.kernelsu.ui.component.miuix.effect.BgEffectBackground
 import me.weishu.kernelsu.ui.component.miuix.effect.ColorBlendToken
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
 import me.weishu.kernelsu.ui.theme.isInDarkTheme
-import me.weishu.kernelsu.ui.util.BlurredBar
-import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -83,6 +81,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
+import top.yukonga.miuix.kmp.theme.miuixShape
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import androidx.compose.ui.graphics.BlendMode as ComposeBlendMode
@@ -108,57 +107,43 @@ fun AboutScreenMiuix(
         }
     }
 
-    val enableBlur = LocalEnableBlur.current
-    val barBlurBackdrop = rememberBlurBackdrop(enableBlur)
-    val blurActive = barBlurBackdrop != null && scrollProgress == 1f
-    val barColor = if (blurActive) {
-        Color.Transparent
-    } else {
-        if (scrollProgress == 1f) colorScheme.surface else Color.Transparent
-    }
-
     Scaffold(
         topBar = {
-            BlurredBar(backdrop = barBlurBackdrop, blurActive = blurActive) {
-                SmallTopAppBar(
-                    title = state.title,
-                    scrollBehavior = topAppBarScrollBehavior,
-                    color = barColor,
-                    titleColor = colorScheme.onSurface.copy(
-                        alpha = ((scrollProgress - 0.35f) / 0.65f).coerceIn(0f, 1f),
-                    ),
-                    navigationIcon = {
-                        IconButton(
-                            onClick = actions.onBack
-                        ) {
-                            val layoutDirection = LocalLayoutDirection.current
-                            Icon(
-                                modifier = Modifier.graphicsLayer {
-                                    if (layoutDirection == LayoutDirection.Rtl) scaleX = -1f
-                                },
-                                imageVector = MiuixIcons.Back,
-                                contentDescription = null,
-                                tint = colorScheme.onBackground
-                            )
-                        }
-                    },
-                )
-            }
+            SmallTopAppBar(
+                title = state.title,
+                scrollBehavior = topAppBarScrollBehavior,
+                color = colorScheme.surface.copy(alpha = if (scrollProgress == 1f) 1f else 0f),
+                titleColor = colorScheme.onSurface.copy(alpha = scrollProgress),
+                defaultWindowInsetsPadding = false,
+                navigationIcon = {
+                    IconButton(
+                        onClick = actions.onBack
+                    ) {
+                        val layoutDirection = LocalLayoutDirection.current
+                        Icon(
+                            modifier = Modifier.graphicsLayer {
+                                if (layoutDirection == LayoutDirection.Rtl) scaleX = -1f
+                            },
+                            imageVector = MiuixIcons.Back,
+                            contentDescription = null,
+                            tint = colorScheme.onBackground
+                        )
+                    }
+                },
+            )
         },
         popupHost = { },
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal),
     ) { innerPadding ->
-        Box(modifier = if (barBlurBackdrop != null) Modifier.layerBackdrop(barBlurBackdrop) else Modifier) {
-            AboutContent(
-                state = state,
-                actions = actions,
-                innerPadding = innerPadding,
-                topAppBarScrollBehavior = topAppBarScrollBehavior,
-                lazyListState = lazyListState,
-                scrollProgress = scrollProgress,
-                onLogoHeightChanged = { logoHeightPx = it },
-            )
-        }
+        AboutContent(
+            state = state,
+            actions = actions,
+            innerPadding = innerPadding,
+            topAppBarScrollBehavior = topAppBarScrollBehavior,
+            lazyListState = lazyListState,
+            scrollProgress = scrollProgress,
+            onLogoHeightChanged = { logoHeightPx = it },
+        )
     }
 }
 
@@ -259,7 +244,6 @@ private fun AboutContent(
         dynamicBackground = effectBackground,
         modifier = Modifier.fillMaxSize(),
         bgModifier = Modifier.layerBackdrop(backdrop),
-        isFullSize = true,
         effectBackground = effectBackground,
         alpha = { 1f - scrollProgress },
     ) {
@@ -415,7 +399,7 @@ private fun AboutContent(
                                 if (enableBlur) {
                                     Modifier.textureBlur(
                                         backdrop = backdrop,
-                                        shape = RoundedCornerShape(16.dp),
+                                        shape = miuixShape(16.dp),
                                         blurRadius = 60f,
                                         colors = BlurColors(blendColors = blendColors),
                                         enabled = true,

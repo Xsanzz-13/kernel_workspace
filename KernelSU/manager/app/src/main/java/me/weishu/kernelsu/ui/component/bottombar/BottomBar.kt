@@ -5,7 +5,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -13,13 +12,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.kyant.backdrop.Backdrop
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import me.weishu.kernelsu.ui.LocalUiMode
 import me.weishu.kernelsu.ui.UiMode
-import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import kotlin.math.abs
 
@@ -85,32 +84,25 @@ fun rememberMainPagerState(
     }
 }
 
-@Immutable
-data class ModuleBadgeState(
-    val enabledCount: Int = 0,
-    val updatableCount: Int = 0,
-)
-
 @Composable
 fun BottomBar(
     blurBackdrop: LayerBackdrop?,
     backdrop: Backdrop,
-    moduleBadge: ModuleBadgeState,
     modifier: Modifier = Modifier,
 ) {
     when (LocalUiMode.current) {
-        UiMode.Miuix -> BottomBarMiuix(blurBackdrop, backdrop, moduleBadge, modifier)
-        UiMode.Material -> BottomBarMaterial(moduleBadge)
+        UiMode.Miuix -> BottomBarMiuix(blurBackdrop, backdrop, modifier)
+        UiMode.Material -> BottomBarMaterial()
     }
 }
 
 @Composable
 fun SideRail(
-    moduleBadge: ModuleBadgeState,
+    blurBackdrop: LayerBackdrop?,
     modifier: Modifier = Modifier,
 ) {
     when (LocalUiMode.current) {
-        UiMode.Miuix -> NavigationRailMiuix(moduleBadge, modifier)
-        UiMode.Material -> NavigationRailMaterial(moduleBadge, modifier)
+        UiMode.Miuix -> NavigationRailMiuix(blurBackdrop, modifier)
+        UiMode.Material -> NavigationRailMaterial(modifier)
     }
 }

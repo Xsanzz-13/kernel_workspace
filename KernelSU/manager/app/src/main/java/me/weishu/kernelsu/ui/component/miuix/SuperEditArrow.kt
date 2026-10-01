@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -37,11 +38,12 @@ fun SuperEditArrow(
     onValueChange: ((Int) -> Unit)? = null
 ) {
     val showDialog = remember { mutableStateOf(false) }
+    val dialogTextFieldValue = remember { mutableIntStateOf(defaultValue) }
 
     ArrowPreference(
         title = title,
         titleColor = titleColor,
-        summary = defaultValue.toString(),
+        summary = dialogTextFieldValue.intValue.toString(),
         summaryColor = summaryColor,
         startAction = startAction,
         modifier = modifier,
@@ -57,9 +59,10 @@ fun SuperEditArrow(
         title = title,
         show = showDialog.value,
         onDismissRequest = { showDialog.value = false },
-        dialogTextFieldValue = defaultValue,
+        dialogTextFieldValue = dialogTextFieldValue.intValue,
         onValueChange = {
-            onValueChange?.invoke(it)
+            dialogTextFieldValue.intValue = it
+            onValueChange?.invoke(dialogTextFieldValue.intValue)
         }
     )
 
@@ -73,7 +76,8 @@ private fun EditDialog(
     dialogTextFieldValue: Int,
     onValueChange: (Int) -> Unit,
 ) {
-    val filter = remember(dialogTextFieldValue) { FilterNumber(dialogTextFieldValue) }
+    val inputTextFieldValue = remember { mutableIntStateOf(dialogTextFieldValue) }
+    val filter = remember(key1 = inputTextFieldValue.intValue) { FilterNumber(dialogTextFieldValue) }
 
     OverlayDialog(
         show = show,

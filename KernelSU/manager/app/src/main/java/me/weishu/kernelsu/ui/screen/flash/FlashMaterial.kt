@@ -15,18 +15,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallExtendedFloatingActionButton
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -40,16 +41,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.KeyEventBlocker
-import me.weishu.kernelsu.ui.component.material.ExpressiveScaffold
-import me.weishu.kernelsu.ui.component.material.SnackBarHost
-import me.weishu.kernelsu.ui.component.material.TopBarBackButton
-import me.weishu.kernelsu.ui.component.material.expressiveTopAppBarColors
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FlashScreenMaterial(
     state: FlashUiState,
     actions: FlashScreenActions,
-    snackBarHost: SnackbarHostState,
 ) {
     val scrollState = rememberScrollState()
     if (state.showJailbreakWarning) {
@@ -59,12 +56,7 @@ fun FlashScreenMaterial(
         )
     }
 
-    ExpressiveScaffold(
-        snackbarHost = {
-            SnackBarHost(
-                hostState = snackBarHost,
-                modifier = Modifier.let { if (state.showRebootAction) it else it.safeDrawingPadding() })
-        },
+    Scaffold(
         topBar = {
             TopAppBar(
                 title = {
@@ -78,9 +70,10 @@ fun FlashScreenMaterial(
                         )
                     )
                 },
-                colors = expressiveTopAppBarColors(),
                 navigationIcon = {
-                    TopBarBackButton(onClick = actions.onBack)
+                    IconButton(onClick = actions.onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                    }
                 },
                 actions = {
                     IconButton(onClick = actions.onSaveLog) {

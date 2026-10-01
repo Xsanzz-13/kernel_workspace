@@ -5,7 +5,6 @@ import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.Color
 import me.weishu.kernelsu.data.model.AppInfo
 import me.weishu.kernelsu.ui.component.SearchStatus
-import me.weishu.kernelsu.ui.viewmodel.AppSortConfig
 
 @Immutable
 data class GroupedApps(
@@ -24,13 +23,11 @@ data class SuperUserUiState(
     val isRefreshing: Boolean = false,
     val hasLoaded: Boolean = false,
     val groupedApps: List<GroupedApps> = emptyList(),
-    val recentlyInstalledResults: List<GroupedApps> = emptyList(),
     val userIds: List<Int> = emptyList(),
     val searchStatus: SearchStatus = SearchStatus(""),
     val searchResults: List<GroupedApps> = emptyList(),
     val showSystemApps: Boolean = false,
     val showOnlyPrimaryUserApps: Boolean = false,
-    val sortConfig: AppSortConfig = AppSortConfig(),
     val error: Throwable? = null
 )
 
@@ -43,7 +40,6 @@ data class SuperUserActions(
     val onClearSearch: () -> Unit,
     val onToggleShowSystemApps: () -> Unit,
     val onToggleShowOnlyPrimaryUserApps: () -> Unit,
-    val onUpdateSortConfig: (AppSortConfig) -> Unit,
     val onOpenProfile: (GroupedApps) -> Unit,
 )
 

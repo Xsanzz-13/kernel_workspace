@@ -35,7 +35,7 @@ import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.CallToAction
 import androidx.compose.material.icons.rounded.Colorize
 import androidx.compose.material.icons.rounded.DesignServices
-import androidx.compose.material.icons.rounded.Pin
+import androidx.compose.material.icons.rounded.RoundedCorner
 import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material.icons.rounded.WaterDrop
@@ -84,6 +84,7 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
+import top.yukonga.miuix.kmp.theme.miuixShape
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
@@ -333,19 +334,19 @@ fun ColorPaletteScreenMiuix(
                             )
                         }
                         SwitchPreference(
-                            title = stringResource(id = R.string.settings_navigation_badge),
-                            summary = stringResource(id = R.string.settings_navigation_badge_summary),
+                            title = stringResource(id = R.string.settings_smooth_corner),
+                            summary = stringResource(id = R.string.settings_smooth_corner_summary),
                             startAction = {
                                 Icon(
-                                    Icons.Rounded.Pin,
+                                    Icons.Rounded.RoundedCorner,
                                     modifier = Modifier.padding(end = 6.dp),
-                                    contentDescription = stringResource(id = R.string.settings_navigation_badge),
+                                    contentDescription = stringResource(id = R.string.settings_smooth_corner),
                                     tint = colorScheme.onBackground
                                 )
                             },
-                            checked = uiState.enableNavigationBadge,
+                            checked = uiState.enableSmoothCorner,
                             onCheckedChange = {
-                                actions.onSetEnableNavigationBadge(it)
+                                actions.onSetEnableSmoothCorner(it)
                             }
                         )
                     }
@@ -484,9 +485,9 @@ private fun ThemePreviewCardMiuix(
             modifier = Modifier
                 .fillMaxWidth(0.4f)
                 .aspectRatio(screenRatio)
-                .clip(RoundedCornerShape(20.dp))
+                .clip(miuixShape(20.dp))
                 .background(bgColor)
-                .border(1.dp, colorScheme.outline, RoundedCornerShape(20.dp))
+                .border(1.dp, colorScheme.outline, miuixShape(20.dp))
         ) {
             Column {
                 Row(

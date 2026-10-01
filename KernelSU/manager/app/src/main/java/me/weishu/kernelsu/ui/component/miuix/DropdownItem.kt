@@ -17,7 +17,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun DropdownItem(
-    modifier: Modifier = Modifier,
     text: String,
     optionSize: Int,
     index: Int,
@@ -29,7 +28,7 @@ fun DropdownItem(
     val additionalBottomPadding = if (index == optionSize - 1) 20f.dp else 12f.dp
 
     Row(
-        modifier = modifier
+        modifier = Modifier
             .clickable { currentOnSelectedIndexChange.value(index) }
             .background(dropdownColors.containerColor)
             .padding(horizontal = 20.dp)

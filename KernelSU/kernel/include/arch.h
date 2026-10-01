@@ -22,16 +22,12 @@
 #define SYS_NEWFSTAT_SYMBOL "__arm64_sys_newfstat"
 #define SYS_FSTAT64_SYMBOL "__arm64_sys_fstat64"
 #define SYS_READ_SYMBOL "__arm64_sys_read"
-#define SYS_NEWFSTATAT_SYMBOL "__arm64_sys_newfstatat"
-#define SYS_FACCESSAT_SYMBOL "__arm64_sys_faccessat"
 #else
 #define SYS_EXECVE_SYMBOL "sys_execve"
 #define SYS_REBOOT_SYMBOL "sys_reboot"
 #define SYS_NEWFSTAT_SYMBOL "sys_newfstat"
 #define SYS_FSTAT64_SYMBOL "sys_fstat64"
 #define SYS_READ_SYMBOL "sys_read"
-#define SYS_NEWFSTATAT_SYMBOL "sys_newfstatat"
-#define SYS_FACCESSAT_SYMBOL "sys_faccessat"
 #endif
 
 #elif defined(__arm__)
@@ -66,8 +62,6 @@
 #define SYS_NEWFSTAT_SYMBOL "sys_newfstat"
 #define SYS_FSTAT64_SYMBOL "sys_fstat64"
 #define SYS_READ_SYMBOL "sys_read"
-#define SYS_NEWFSTATAT_SYMBOL "sys_newfstatat"
-#define SYS_FACCESSAT_SYMBOL "sys_faccessat"
 
 #elif defined(__x86_64__)
 
@@ -90,17 +84,13 @@
 #define SYS_REBOOT_SYMBOL "__x64_sys_reboot"
 #define SYS_NEWFSTAT_SYMBOL "__x64_sys_newfstat"
 #define SYS_FSTAT64_SYMBOL "__ia32_compat_sys_x86_fstat64"
-#define SYS_NEWFSTAT_SYMBOL "__x64_sys_newfstat"
-#define SYS_NEWFSTATAT_SYMBOL "__x64_sys_newfstatat"
-#define SYS_FACCESSAT_SYMBOL "__x64_sys_faccessat"
+#define SYS_NEWFSTAT_SYMBOL "__x64_sys_read"
 #else
 #define SYS_EXECVE_SYMBOL "sys_execve"
 #define SYS_REBOOT_SYMBOL "sys_reboot"
 #define SYS_NEWFSTAT_SYMBOL "sys_newfstat"
 #define SYS_FSTAT64_SYMBOL "sys_fstat64"
 #define SYS_READ_SYMBOL "sys_read"
-#define SYS_NEWFSTATAT_SYMBOL "sys_newfstatat"
-#define SYS_FACCESSAT_SYMBOL "sys_faccessat"
 #endif
 
 #else
