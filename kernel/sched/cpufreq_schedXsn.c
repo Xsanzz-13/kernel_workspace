@@ -30,6 +30,7 @@
 
 #define SCHEDXSN_FREQ_BIAS 10
 #define SCHEDXSN_ADAPTIVE_BIAS_MAX 15
+#define SCHEDXSN_IDLE_LOAD_NS 500000000ULL
 
 unsigned long cpu_util_freq(int cpu);
 unsigned long boosted_cpu_util(int cpu, unsigned long other_util);
@@ -414,18 +415,27 @@ static void schedxsn_performance_htimer_start(struct schedxsn_policy *sg_policy,
 }
 
 static void schedxsn_update_single(struct update_util_data *hook, u64 time,
-				unsigned int flags)
+				  unsigned int flags)
 {
-	struct schedxsn_cpu *sg_cpu = container_of(hook, struct schedxsn_cpu, update_util);
+	struct schedxsn_cpu *sg_cpu = container_of(hook, struct schedxsn_cpu,
+						  update_util);
 	struct schedxsn_policy *sg_policy = sg_cpu->sg_policy;
 	struct cpufreq_policy *policy = sg_policy->policy;
 	unsigned long util, max;
 	unsigned int next_f;
 	bool busy;
+	u64 last_update;
+	bool idle_to_load;
 
 	util = schedxsn_get_util(&max, sg_cpu->cpu);
 
 	raw_spin_lock(&sg_policy->update_lock);
+
+	/*
+	 * Keep the previous update timestamp/util before overwriting them.
+	 * Used for long-idle -> load recovery.
+	 */
+	last_update = sg_cpu->last_update;
 
 	sg_cpu->util = util;
 	sg_cpu->max = max;
@@ -443,11 +453,28 @@ static void schedxsn_update_single(struct update_util_data *hook, u64 time,
 
 	busy = schedxsn_cpu_is_busy(sg_cpu);
 
+	/*
+	 * Detect a long idle period followed by a heavy workload.
+	 * Give the CPU one immediate kick to maximum frequency.
+	 */
+	idle_to_load = last_update &&
+		       time > last_update &&
+		       time - last_update >= SCHEDXSN_IDLE_LOAD_NS &&
+		       sg_cpu->util < (max >> 2) &&
+		       util >= ((max * 3) >> 2);
+
 	if (flags & SCHED_CPUFREQ_DL) {
 		next_f = policy->cpuinfo.max_freq;
 	} else {
 		schedxsn_iowait_boost(sg_cpu, &util, &max);
-		next_f = schedxsn_get_next_freq(sg_policy, util, max, false);
+
+		if (idle_to_load) {
+			next_f = policy->cpuinfo.max_freq;
+			sg_policy->cached_raw_freq = UINT_MAX;
+		} else {
+			next_f = schedxsn_get_next_freq(sg_policy, util, max, false);
+		}
+
 		/*
 		 * Do not reduce the frequency if the CPU has not been idle
 		 * recently, as the reduction is likely to be premature then.
@@ -456,7 +483,9 @@ static void schedxsn_update_single(struct update_util_data *hook, u64 time,
 		    sg_policy->next_freq != UINT_MAX) {
 			next_f = sg_policy->next_freq;
 
-			/* Reset cached freq as next_freq has changed */
+			/*
+			 * Reset cached raw frequency as next_freq has changed.
+			 */
 			sg_policy->cached_raw_freq = UINT_MAX;
 		}
 	}
