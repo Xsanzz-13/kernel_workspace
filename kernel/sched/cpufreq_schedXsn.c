@@ -29,6 +29,7 @@
 #define OTHER_CPUMASK_FREQ_MARGIN 30
 
 #define SCHEDXSN_FREQ_BIAS 10
+#define SCHEDXSN_ADAPTIVE_BIAS_MAX 15
 
 unsigned long cpu_util_freq(int cpu);
 unsigned long boosted_cpu_util(int cpu, unsigned long other_util);
@@ -249,8 +250,13 @@ static unsigned int schedxsn_get_next_freq(struct schedxsn_policy *sg_policy,
 	unsigned int freq = arch_scale_freq_invariant() ?
 				policy->cpuinfo.max_freq : policy->cur;
 	int freq_margin = sg_policy->tunables->freq_margin;
+	int adaptive_bias = 0;
 
-	freq_margin += SCHEDXSN_FREQ_BIAS;
+	if (max)
+		adaptive_bias = (int)(((u64)util *
+					SCHEDXSN_ADAPTIVE_BIAS_MAX) / max);
+
+	freq_margin += SCHEDXSN_FREQ_BIAS + adaptive_bias;
 
 	if (freq_margin > -100 && freq_margin < 100)
 		freq_margin = ((int)freq * freq_margin) / 100;
