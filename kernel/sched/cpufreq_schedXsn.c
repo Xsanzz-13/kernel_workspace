@@ -31,6 +31,7 @@
 #define SCHEDXSN_FREQ_BIAS 10
 #define SCHEDXSN_ADAPTIVE_BIAS_MAX 15
 #define SCHEDXSN_IDLE_LOAD_NS 500000000ULL
+#define SCHEDXSN_HYSTERESIS_PCT 10
 
 unsigned long cpu_util_freq(int cpu);
 unsigned long boosted_cpu_util(int cpu, unsigned long other_util);
@@ -238,39 +239,61 @@ unlock:
  * Frekuensi dihitung berdasarkan utilization CPU, frekuensi dasar
  * policy, dan frequency margin yang sedang digunakan.
  *
- * schedXsn menambahkan bias frekuensi melalui SCHEDXSN_FREQ_BIAS
- * sebelum menghitung permintaan frekuensi mentah.
+ * schedXsn menambahkan frequency bias tetap melalui SCHEDXSN_FREQ_BIAS
+ * serta adaptive bias berdasarkan tingkat utilization CPU.
  *
- * Frekuensi terendah yang didukung driver dan memenuhi hasil perhitungan
- * akan dipilih, dengan tetap mengikuti batas policy dan driver cpufreq.
+ * Hasil frekuensi kemudian diselesaikan oleh driver cpufreq sesuai
+ * frekuensi yang tersedia pada policy.
+ *
+ * Penurunan frekuensi kecil ditahan oleh frequency hysteresis untuk
+ * mengurangi perpindahan frekuensi naik-turun yang terlalu sering,
+ * sementara kenaikan frekuensi tetap dapat dilakukan secara langsung.
  */
 static unsigned int schedxsn_get_next_freq(struct schedxsn_policy *sg_policy,
-				  unsigned long util, unsigned long max, bool flag)
+                                  unsigned long util, unsigned long max, bool flag)
 {
-	struct cpufreq_policy *policy = sg_policy->policy;
-	unsigned int freq = arch_scale_freq_invariant() ?
-				policy->cpuinfo.max_freq : policy->cur;
-	int freq_margin = sg_policy->tunables->freq_margin;
-	int adaptive_bias = 0;
+        struct cpufreq_policy *policy = sg_policy->policy;
+        unsigned int freq = arch_scale_freq_invariant() ?
+                                policy->cpuinfo.max_freq : policy->cur;
+        unsigned int resolved_freq;
+        unsigned int current_freq = policy->cur;
+        unsigned int hysteresis;
+        int freq_margin = sg_policy->tunables->freq_margin;
+        int adaptive_bias = 0;
 
-	if (max)
-		adaptive_bias = (int)(((u64)util *
-					SCHEDXSN_ADAPTIVE_BIAS_MAX) / max);
+        if (max)
+                adaptive_bias = (int)(((u64)util *
+                                        SCHEDXSN_ADAPTIVE_BIAS_MAX) / max);
 
-	freq_margin += SCHEDXSN_FREQ_BIAS + adaptive_bias;
+        freq_margin += SCHEDXSN_FREQ_BIAS + adaptive_bias;
 
-	if (freq_margin > -100 && freq_margin < 100)
-		freq_margin = ((int)freq * freq_margin) / 100;
-	else
-		freq_margin = freq >> 2;
+        if (freq_margin > -100 && freq_margin < 100)
+                freq_margin = ((int)freq * freq_margin) / 100;
+        else
+                freq_margin = freq >> 2;
 
-	freq = div64_u64((u64)((int)freq + freq_margin) * (u64)util, max);
+        freq = div64_u64((u64)((int)freq + freq_margin) * (u64)util, max);
 
-	if (freq == sg_policy->cached_raw_freq && sg_policy->next_freq != UINT_MAX)
-		return sg_policy->next_freq;
-	if (flag)
-		sg_policy->cached_raw_freq = freq;
-	return cpufreq_driver_resolve_freq(policy, freq);
+        if (freq == sg_policy->cached_raw_freq &&
+            sg_policy->next_freq != UINT_MAX)
+                return sg_policy->next_freq;
+
+        resolved_freq = cpufreq_driver_resolve_freq(policy, freq);
+
+        /*
+         * Prevent small frequency drops from causing rapid
+         * up/down transitions. Frequency increases remain immediate.
+         */
+        hysteresis = (current_freq * SCHEDXSN_HYSTERESIS_PCT) / 100;
+
+        if (resolved_freq < current_freq &&
+            current_freq - resolved_freq < hysteresis)
+                resolved_freq = current_freq;
+
+        if (flag)
+                sg_policy->cached_raw_freq = freq;
+
+        return resolved_freq;
 }
 
 static unsigned long schedxsn_get_util(unsigned long *max, int cpu)
