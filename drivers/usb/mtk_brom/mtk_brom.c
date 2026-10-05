@@ -98,7 +98,7 @@ static const struct usb_device_id mtk_brom_ids[] = {
 		USB_DEVICE_INTERFACE_NUMBER(
 			MTK_BROM_VENDOR,
 			MTK_BROM_PRODUCT,
-			0
+			1
 		)
 	},
 	{ }
