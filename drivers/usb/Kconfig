@@ -216,3 +216,5 @@ config SPRD_USB_GCOV
 	  Say Y here to enable gcov in usb.
 
 endif # USB_SUPPORT
+
+source "drivers/usb/mtk_brom/Kconfig"
