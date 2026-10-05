@@ -1,0 +1,6 @@
+config USB_MTK_BROM
+	tristate "MediaTek BROM USB driver"
+	depends on USB
+	help
+	  Minimal USB driver for MediaTek BootROM devices
+	  with VID:PID 0e8d:0003.
