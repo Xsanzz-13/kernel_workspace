@@ -43,6 +43,32 @@ jobs:
           restore-keys: |
             proton-clang-master-ubuntu22-
 
+      - name: Inspect Proton Clang
+        run: |
+          PROTON_DIR="${{ github.workspace }}/toolchain_download/proton-clang"
+
+          echo "===== Proton directory ====="
+          ls -lah "$PROTON_DIR"
+
+          echo "===== bin ====="
+          ls -lah "$PROTON_DIR/bin" | head -100
+
+          echo "===== AArch64 tools ====="
+          find "$PROTON_DIR/bin" -maxdepth 1 \
+          -type f -name 'aarch64-linux-gnu-*' -printf '%f\n' | sort
+
+          echo "===== ARM32 tools ====="
+          find "$PROTON_DIR/bin" -maxdepth 1 \
+          -type f -name 'arm-linux-gnueabi-*' -printf '%f\n' | sort
+
+          echo "===== Compiler ====="
+          "$PROTON_DIR/bin/clang" --version | head -5
+
+          echo "===== LLVM tools ====="
+          "$PROTON_DIR/bin/ld.lld" --version | head -2
+          "$PROTON_DIR/bin/llvm-ar" --version | head -2
+          "$PROTON_DIR/bin/llvm-nm" --version | head -2    
+
       # ==========================================
       # CACHE APT
       # ==========================================
