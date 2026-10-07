@@ -65,7 +65,7 @@ else
 fi
 
 # ==========================================
-# TAHAP 3: DOWNLOAD / UPDATE PROTON CLANG
+# TAHAP 3: DOWNLOAD PROTON CLANG
 # ==========================================
 mkdir -p "$TOOLCHAIN_DIR"
 
@@ -81,11 +81,7 @@ if [ ! -x "$PROTON_DIR/bin/clang" ]; then
         "$PROTON_DIR"
 else
     echo "[=] Proton Clang ditemukan dari cache."
-    echo "[+] Memastikan toolchain menggunakan versi terbaru..."
-
-    git -C "$PROTON_DIR" fetch --depth=1 origin master
-    git -C "$PROTON_DIR" reset --hard origin/master
-    git -C "$PROTON_DIR" clean -fd
+    echo "[=] Menggunakan toolchain yang tersedia."
 fi
 
 # ==========================================
@@ -102,14 +98,6 @@ clang --version | head -3
 echo ""
 echo "ld.lld:"
 ld.lld --version | head -1
-
-echo ""
-echo "aarch64 cross:"
-${CROSS_COMPILE}gcc --version | head -1 || true
-
-echo ""
-echo "arm32 cross:"
-${CROSS_COMPILE_ARM32}gcc --version | head -1 || true
 
 echo ""
 echo "===== Toolchain paths ====="
@@ -143,13 +131,13 @@ export KBUILD_BUILD_HOST="A3C-stable"
 export KBUILD_BUILD_TIMESTAMP="$(date '+%a %b %d %T WIB %Y')"
 
 # ==========================================
-# TAHAP 8: IGNORE YAML
+# TAHAP 7: IGNORE YAML
 # ==========================================
 sed -i '/yamltree.o/d' scripts/dtc/Makefile
 sed -i '/dt_to_yaml/d' scripts/dtc/dtc.c
 
 # ==========================================
-# TAHAP 9: BUILD KERNEL IMAGE
+# TAHAP 8: BUILD KERNEL IMAGE
 # ==========================================
 echo ""
 echo "[+] Memulai kompilasi Kernel Image dengan Proton Clang..."
@@ -164,12 +152,10 @@ make -C "$KERNEL_ROOT" \
     LD=ld.lld \
     AR=llvm-ar \
     NM=llvm-nm \
-    KCFLAGS="$KCFLAGS" \
-    KBUILD_LDFLAGS="$KBUILD_LDFLAGS" \
     Image
 
 # ==========================================
-# TAHAP 10: BUILD MODULES
+# TAHAP 9: BUILD MODULES
 # ==========================================
 echo ""
 echo "[+] Memulai kompilasi kernel modules (.ko)..."
@@ -184,8 +170,6 @@ make -C "$KERNEL_ROOT" \
     LD=ld.lld \
     AR=llvm-ar \
     NM=llvm-nm \
-    KCFLAGS="$KCFLAGS" \
-    KBUILD_LDFLAGS="$KBUILD_LDFLAGS" \
     modules
 
 echo ""
@@ -193,7 +177,7 @@ echo "[+] Jumlah .ko yang dihasilkan:"
 find "$OUT_DIR" -type f -name "*.ko" | wc -l
 
 # ==========================================
-# TAHAP 11: ARTIFACTS
+# TAHAP 10: ARTIFACTS
 # ==========================================
 echo ""
 echo "[+] Mengumpulkan hasil eksport..."
@@ -246,7 +230,7 @@ echo "[+] Daftar module:"
 find "$MODULE_DIR" -type f -name "*.ko" -exec du -h {} \;
 
 echo ""
-echo "[+] Daftar artifact:"
+echo "[+] artifact:"
 find "$ART_DIR" -type f -exec du -h {} \;
 
 echo ""
