@@ -139,14 +139,8 @@ make -C "$KERNEL_ROOT" \
 # TAHAP 6: BUILD INFORMATION
 # ==========================================
 export KBUILD_BUILD_USER="Xsanzz"
-export KBUILD_BUILD_HOST="A03Core"
+export KBUILD_BUILD_HOST="A3C-stable"
 export KBUILD_BUILD_TIMESTAMP="$(date '+%a %b %d %T WIB %Y')"
-
-# ==========================================
-# TAHAP 7: OPTIMIZATION FLAGS
-# ==========================================
-export KCFLAGS="-march=armv8.2-a+crypto -mtune=cortex-a55 -fno-semantic-interposition"
-export KBUILD_LDFLAGS="--gc-sections --icf=all"
 
 # ==========================================
 # TAHAP 8: IGNORE YAML
