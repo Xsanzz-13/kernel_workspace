@@ -96,7 +96,7 @@ int init_lct_tp_gesture(tp_gesture_cb_t callback)
 EXPORT_SYMBOL(init_lct_tp_gesture);
 
 
-bool get_tp_gesture_stat(void)
+bool get_tp_gesture_stat()
 {
     if(IS_ERR_OR_NULL(lct_tp_p)){
         return false;
