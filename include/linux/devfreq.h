@@ -149,7 +149,8 @@ struct devfreq {
 	unsigned long previous_freq;
 	struct devfreq_dev_status last_status;
 
-	void *data; /* private data for governors */
+	void *data; /* private data supplied by the device driver */
+    void *governor_data; /* private data owned by the active governor */
 
 	unsigned long min_freq;
 	unsigned long max_freq;

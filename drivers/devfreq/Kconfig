@@ -40,6 +40,13 @@ config DEVFREQ_GOV_SIMPLE_ONDEMAND
 	  values that imply the usage rate. A device may provide tuned
 	  values to the governor with data field at devfreq_add_device().
 
+config DEVFREQ_GOV_SIMPLE_PERF_XSN
+        tristate "Simple Perf Xsn"
+        depends on DEVFREQ_GOV_SIMPLE_ONDEMAND
+        help
+          Aggressively tuned simple_ondemand-derived DevFreq governor with
+          per-device runtime tuning through sysfs.
+
 config DEVFREQ_GOV_PERFORMANCE
 	tristate "Performance"
 	help
