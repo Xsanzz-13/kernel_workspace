@@ -14,7 +14,7 @@ jobs:
       - name: Setup SukiSU Ultra Builtin
         run: |
           set -euo pipefail
-          curl -LSs https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh | bash -s builtin
+          curl -LSs https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh | bash -s 496837ad81b9332d352b0b17184a0d637c81b7cc
           test -f KernelSU/kernel/Kconfig
           test -L drivers/kernelsu
           test "$(readlink drivers/kernelsu)" = "../KernelSU/kernel"
