@@ -15,15 +15,16 @@ export BSP_BUILD_ANDROID_OS=y
 export DEFCONFIG="a3core_eur_open_defconfig"
 
 # ==========================================
-# TAHAP 1: KSU Integration
+# TAHAP 1: SukiSU Ultra Builtin
 # ==========================================
-echo "[+] Menggunakan KernelSU Next v1.0.8..."
+echo "[+] Memvalidasi SukiSU Ultra builtin..."
 cd "$KERNEL_ROOT"
-test -f "$KERNEL_ROOT/KernelSU-Next/kernel/Kconfig" || { echo "[!] KernelSU Next source tidak ditemukan"; exit 1; }
+test -f "$KERNEL_ROOT/KernelSU/kernel/Kconfig" || { echo "[!] SukiSU Ultra source tidak ditemukan"; exit 1; }
 test -L "$KERNEL_ROOT/drivers/kernelsu" || { echo "[!] drivers/kernelsu bukan symlink"; exit 1; }
-[ "$(readlink "$KERNEL_ROOT/drivers/kernelsu")" = "../KernelSU-Next/kernel" ] || { echo "[!] Symlink drivers/kernelsu salah"; exit 1; }
-echo "[+] KernelSU Next v1.0.8 siap"
+[ "$(readlink "$KERNEL_ROOT/drivers/kernelsu")" = "../KernelSU/kernel" ] || { echo "[!] Symlink SukiSU Ultra salah"; exit 1; }
+echo "[+] SukiSU Ultra builtin siap"
 # ==========================================
+# TAHAP 2: Extract Kernel Component
 # TAHAP 2: Extract Kernel Component
 # ==========================================
 echo "[+] Mengekstrak komponen sound/soc/sprd..."

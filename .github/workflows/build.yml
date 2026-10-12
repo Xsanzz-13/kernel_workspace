@@ -11,32 +11,17 @@ jobs:
       - name: Checkout Source Kernel
         uses: actions/checkout@v4
 
-      - name: Inspect KernelSU Source
+      - name: Setup SukiSU Ultra Builtin
         run: |
-          echo "===== KernelSU directory ====="
-          ls -la KernelSU || true
-          ls -la KernelSU/kernel || true
-
-          echo ""
-          echo "===== KernelSU git info ====="
-          cd KernelSU
-          git remote -v || true
-          git log -1 --oneline || true
-          git status --short || true
-          cd ..
-
-          echo ""
-          echo "===== KernelSU kernel files ====="
-          find KernelSU/kernel -maxdepth 2 -type f | sort | head -100
-
-          echo ""
-          echo "===== KernelSU Kconfig ====="
-          sed -n '1,240p' KernelSU/kernel/Kconfig 2>/dev/null || true
-
-          echo ""
-          echo "===== KernelSU Makefile ====="
-          sed -n '1,200p' KernelSU/kernel/Makefile 2>/dev/null || true
-          
+          set -euo pipefail
+          curl -LSs https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh | bash -s builtin
+          test -f KernelSU/kernel/Kconfig
+          test -L drivers/kernelsu
+          test "$(readlink drivers/kernelsu)" = "../KernelSU/kernel"
+          grep -q ksu_handle_execveat fs/exec.c
+          grep -q ksu_handle_faccessat fs/open.c
+          grep -q ksu_handle_stat fs/stat.c
+          grep -q ksu_handle_vfs_read fs/read_write.c
       - name: Ubah Default Shell ke Bash
         run: |
           sudo ln -sf /bin/bash /bin/sh
