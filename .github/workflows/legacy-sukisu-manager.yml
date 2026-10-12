@@ -1,0 +1,38 @@
+name: Build Legacy SukiSU Manager
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout compatible source
+        uses: actions/checkout@v4
+        with:
+          repository: SukiSU-Ultra/SukiSU-Ultra
+          ref: 3635a45b191bff175ac3ee3ff1e753c9c384acc0
+          path: legacy-src
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Manager APK
+        working-directory: legacy-src/manager
+        run: ./gradlew clean assembleRelease
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SukiSU-Legacy-Manager
+          path: legacy-src/manager/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
