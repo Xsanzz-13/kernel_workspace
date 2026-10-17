@@ -651,7 +651,7 @@ static inline void cmdq_poll_wait_calc(struct sprd_sdhc_host *host,
 		dir = (cmd->opcode == MMC_EXECUTE_READ_TASK)?0:1;
 		poll = &host->poll[dir];
 
-		delta = ((int)(now - pre_time))/1000;
+		delta = (int)((now - pre_time) / 1000ULL);
 		if (!poll->first[index]
 			&& poll->wait[index] > delta)
 			poll->wait[index] = delta;
