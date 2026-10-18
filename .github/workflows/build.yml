@@ -1,4 +1,4 @@
-name: Build Kernel Otomatis
+name: Build Kernel
 
 on:
   workflow_dispatch:
@@ -89,13 +89,13 @@ jobs:
             libyaml-dev \
             tar
 
-      - name: Eksekusi Kompilasi Kernel
+      - name: compile
         run: |
           chmod +x b.sh
           ./b.sh
 
-      - name: Upload Hasil Jadi
+      - name: Upload Hasil
         uses: actions/upload-artifact@v4
         with:
-          name: Hasil-Kernel-Sprd
+          name: Kernel-Sprd
           path: ${{ github.workspace }}/output_artifacts/*
