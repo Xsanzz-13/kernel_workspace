@@ -1,3 +1,4 @@
+
 name: Build Kernel Otomatis
 
 on:
@@ -23,34 +24,39 @@ jobs:
           grep -q ksu_handle_stat fs/stat.c
           grep -q ksu_handle_vfs_read fs/read_write.c
 
-      - name: Definisi Versi dan API SukiSU
+      - name: Audit Definisi Versi dan API SukiSU
         run: |
           set -eu
 
           echo "===== VERSION / API DEFINITIONS ====="
           git -C KernelSU grep -n -i -E \
-            'uapi|minimal_supported_kernel|kernel_su_version|version_code|version_name|ksu_version|manager.*version' \
-            HEAD -- \
-            ':!*.lock' || true
+            'uapi|minimal_supported_kernel|kernel_su_version|version_code|version_name|ksu_version|manager.*version|KSU_VERSION_API|KSU_VERSION_FULL' \
+            HEAD -- ':!*.lock' || true
 
           echo
-          echo "===== SOURCE TREE ====="
-          find KernelSU -maxdepth 3 -type f \
-            \( -name '*version*' -o -name '*uapi*' -o -name 'Natives.kt' -o -name 'ksu.h' \) \
+          echo "===== VERSION AND UAPI FILES ====="
+          find KernelSU -type f \
+            \( -iname '*version*' -o -iname '*uapi*' -o -name 'Natives.kt' -o -name 'ksu.h' \) \
             -print | head -200
 
           echo
-          echo "===== COMMIT METADATA ====="
+          echo "===== KBUILD VERSION LOGIC ====="
+          sed -n '28,95p' KernelSU/kernel/Kbuild
+
+          echo
+          echo "===== MANAGER VERSION INFO INTERFACE ====="
+          sed -n '1,100p' KernelSU/kernel/supercalls.h
+          sed -n '75,115p' KernelSU/kernel/supercalls.c
+
+          echo
+          echo "===== SUKISU COMMIT ====="
           git -C KernelSU show -s \
             --format='commit=%H%nsubject=%s%ndate=%cI' HEAD
-          
+
       - name: Ubah Default Shell ke Bash
         run: |
           sudo ln -sf /bin/bash /bin/sh
 
-      # ================================
-      # CACHE TOOLCHAIN
-      # ================================
       - name: Cache Toolchains
         uses: actions/cache@v4
         with:
@@ -60,9 +66,6 @@ jobs:
           restore-keys: |
             toolchain-ubuntu22-
 
-      # ================================
-      # CACHE APT
-      # ================================
       - name: Cache APT
         uses: actions/cache@v4
         with:
@@ -70,7 +73,7 @@ jobs:
             /var/cache/apt/archives
           key: apt-ubuntu-22.04-v1
           restore-keys: |
-            apt-ubuntu-22.04-
+            toolchain-ubuntu22-
 
       - name: Install Dependencies Sistem
         run: |
@@ -106,3 +109,4 @@ jobs:
         with:
           name: Hasil-Kernel-Sprd
           path: ${{ github.workspace }}/output_artifacts/*
+          
