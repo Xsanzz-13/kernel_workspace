@@ -22,6 +22,28 @@ jobs:
           grep -q ksu_handle_faccessat fs/open.c
           grep -q ksu_handle_stat fs/stat.c
           grep -q ksu_handle_vfs_read fs/read_write.c
+
+      - name: SukiSU Manager Compatibility
+        run: |
+          set -eu
+
+          echo "===== SUKISU COMMIT ====="
+          git -C KernelSU rev-parse HEAD
+
+          echo
+          echo "===== UAPI SOURCE REFERENCES ====="
+          grep -R -n \
+            -E 'get_kernel_uapi_version|get_manager_uapi_version|KERNEL_UAPI|MANAGER_UAPI' \
+            KernelSU/kernel KernelSU/userspace \
+            2>/dev/null || true
+
+          echo
+          echo "===== BUILTIN HOOK REFERENCES ====="
+          grep -R -n \
+            -E 'ksu_handle_execveat|ksu_handle_faccessat|ksu_handle_stat|ksu_handle_vfs_read' \
+            KernelSU/kernel \
+            2>/dev/null || true
+          
       - name: Ubah Default Shell ke Bash
         run: |
           sudo ln -sf /bin/bash /bin/sh
