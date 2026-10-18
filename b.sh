@@ -69,7 +69,16 @@ export CROSS_COMPILE_ARM32="$TOOLCHAIN_DIR/gcc-14.3/bin/arm-none-linux-gnueabihf
 # ==========================================
 echo "[+] Melakukan konfigurasi kernel dengan $DEFCONFIG..."
 make -C $KERNEL_ROOT O=$KERNEL_ROOT/out ARCH=$ARCH CC=$CC LD=ld.lld $DEFCONFIG
+echo "===== SUKISU BUILD CONFIG ====="
 
+grep -E '^CONFIG_KSU=|^CONFIG_KPM=' "$KERNEL_ROOT/out/.config" || true
+
+if ! grep -q '^CONFIG_KSU=y$' "$KERNEL_ROOT/out/.config"; then
+    echo "[ERROR] CONFIG_KSU bukan builtin"
+    exit 1
+fi
+
+echo "[OK] CONFIG_KSU=y"
 echo "[+] Memulai kompilasi Kernel Image..."
 export KBUILD_BUILD_USER="Xsanzz"
 export KBUILD_BUILD_HOST="A03Core"
