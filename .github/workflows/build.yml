@@ -23,26 +23,26 @@ jobs:
           grep -q ksu_handle_stat fs/stat.c
           grep -q ksu_handle_vfs_read fs/read_write.c
 
-      - name: SukiSU Manager Compatibility
+      - name: Definisi Versi dan API SukiSU
         run: |
           set -eu
 
-          echo "===== SUKISU COMMIT ====="
-          git -C KernelSU rev-parse HEAD
+          echo "===== VERSION / API DEFINITIONS ====="
+          git -C KernelSU grep -n -i -E \
+            'uapi|minimal_supported_kernel|kernel_su_version|version_code|version_name|ksu_version|manager.*version' \
+            HEAD -- \
+            ':!*.lock' || true
 
           echo
-          echo "===== UAPI SOURCE REFERENCES ====="
-          grep -R -n \
-            -E 'get_kernel_uapi_version|get_manager_uapi_version|KERNEL_UAPI|MANAGER_UAPI' \
-            KernelSU/kernel KernelSU/userspace \
-            2>/dev/null || true
+          echo "===== SOURCE TREE ====="
+          find KernelSU -maxdepth 3 -type f \
+            \( -name '*version*' -o -name '*uapi*' -o -name 'Natives.kt' -o -name 'ksu.h' \) \
+            -print | head -200
 
           echo
-          echo "===== BUILTIN HOOK REFERENCES ====="
-          grep -R -n \
-            -E 'ksu_handle_execveat|ksu_handle_faccessat|ksu_handle_stat|ksu_handle_vfs_read' \
-            KernelSU/kernel \
-            2>/dev/null || true
+          echo "===== COMMIT METADATA ====="
+          git -C KernelSU show -s \
+            --format='commit=%H%nsubject=%s%ndate=%cI' HEAD
           
       - name: Ubah Default Shell ke Bash
         run: |
