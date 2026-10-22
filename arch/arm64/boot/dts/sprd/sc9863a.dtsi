@@ -1109,7 +1109,7 @@
 
 &gpu {
 	assigned-clocks = <&pll CLK_GPLL>;
-	assigned-clock-rates = <850000000>;
+	assigned-clock-rates = <600000000>;
 	clocks = <&aonapb_gate CLK_GNU_EB>,
 	<&aon_clk CLK_GPU_CORE>,<&aon_clk CLK_GPU_SOC>,
 	<&pll CLK_TWPLL_153M6>, <&pll CLK_TWPLL_192M>,
