@@ -41,6 +41,9 @@ struct schedxsn_tunables {
 	unsigned int down_rate_limit_us;
 	unsigned int timer_slack_val_us;
 	int freq_margin;
+
+    unsigned int game_mode;
+	unsigned int game_freq_bias;
 };
 
 struct schedxsn_policy {
@@ -252,12 +255,20 @@ static unsigned int schedxsn_get_next_freq(struct schedxsn_policy *sg_policy,
 				policy->cpuinfo.max_freq : policy->cur;
 	int freq_margin = sg_policy->tunables->freq_margin;
 	int adaptive_bias = 0;
+	unsigned int game_mode;
+	unsigned int game_bias;
 
 	if (max)
 		adaptive_bias = (int)(((u64)util *
 					SCHEDXSN_ADAPTIVE_BIAS_MAX) / max);
 
+	game_mode = READ_ONCE(sg_policy->tunables->game_mode);
+	game_bias = READ_ONCE(sg_policy->tunables->game_freq_bias);
+
 	freq_margin += SCHEDXSN_FREQ_BIAS + adaptive_bias;
+
+	if (game_mode)
+		freq_margin += game_bias;
 
 	if (freq_margin > -100 && freq_margin < 100)
 		freq_margin = ((int)freq * freq_margin) / 100;
@@ -684,6 +695,55 @@ static ssize_t timer_slack_val_us_show(struct gov_attr_set *attr_set, char *buf)
 }
 
 static ssize_t freq_margin_show(struct gov_attr_set *attr_set, char *buf)
+
+static ssize_t game_mode_show(struct gov_attr_set *attr_set, char *buf)
+{
+	struct schedxsn_tunables *tunables = to_schedxsn_tunables(attr_set);
+
+	return sprintf(buf, "%u\n", READ_ONCE(tunables->game_mode));
+}
+
+static ssize_t game_mode_store(struct gov_attr_set *attr_set,
+			       const char *buf, size_t count)
+{
+	struct schedxsn_tunables *tunables = to_schedxsn_tunables(attr_set);
+	unsigned int mode;
+
+	if (kstrtouint(buf, 10, &mode))
+		return -EINVAL;
+
+	if (mode > 1)
+		return -EINVAL;
+
+	WRITE_ONCE(tunables->game_mode, mode);
+
+	return count;
+}
+
+static ssize_t game_freq_bias_show(struct gov_attr_set *attr_set, char *buf)
+{
+	struct schedxsn_tunables *tunables = to_schedxsn_tunables(attr_set);
+
+	return sprintf(buf, "%u\n", READ_ONCE(tunables->game_freq_bias));
+}
+
+static ssize_t game_freq_bias_store(struct gov_attr_set *attr_set,
+				    const char *buf, size_t count)
+{
+	struct schedxsn_tunables *tunables = to_schedxsn_tunables(attr_set);
+	unsigned int bias;
+
+	if (kstrtouint(buf, 10, &bias))
+		return -EINVAL;
+
+	if (bias > 9)
+		return -EINVAL;
+
+	WRITE_ONCE(tunables->game_freq_bias, bias);
+
+	return count;
+}
+
 {
 	struct schedxsn_tunables *tunables = to_schedxsn_tunables(attr_set);
 
@@ -776,12 +836,16 @@ static struct governor_attr up_rate_limit_us = __ATTR_RW(up_rate_limit_us);
 static struct governor_attr down_rate_limit_us = __ATTR_RW(down_rate_limit_us);
 static struct governor_attr timer_slack_val_us = __ATTR_RW(timer_slack_val_us);
 static struct governor_attr freq_margin = __ATTR_RW(freq_margin);
+static struct governor_attr game_mode = __ATTR_RW(game_mode);
+static struct governor_attr game_freq_bias = __ATTR_RW(game_freq_bias);
 
 static struct attribute *schedxsn_attributes[] = {
 	&up_rate_limit_us.attr,
 	&down_rate_limit_us.attr,
 	&timer_slack_val_us.attr,
 	&freq_margin.attr,
+	&game_mode.attr,
+	&game_freq_bias.attr,
 	NULL
 };
 
@@ -1030,6 +1094,8 @@ static int schedxsn_init(struct cpufreq_policy *policy)
 
 	tunables->up_rate_limit_us = 250;
     tunables->down_rate_limit_us = 1500;
+	tunables->game_mode = 0;
+	tunables->game_freq_bias = 5;
 
 	init_timer(&sg_policy->freq_margin_timer);
 	setup_timer(&sg_policy->freq_margin_timer, schedxsn_set_freq_margin,
