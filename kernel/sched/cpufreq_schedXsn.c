@@ -695,6 +695,11 @@ static ssize_t timer_slack_val_us_show(struct gov_attr_set *attr_set, char *buf)
 }
 
 static ssize_t freq_margin_show(struct gov_attr_set *attr_set, char *buf)
+{
+	struct schedxsn_tunables *tunables = to_schedxsn_tunables(attr_set);
+
+	return sprintf(buf, "%d\n", tunables->freq_margin);
+}
 
 static ssize_t game_mode_show(struct gov_attr_set *attr_set, char *buf)
 {
