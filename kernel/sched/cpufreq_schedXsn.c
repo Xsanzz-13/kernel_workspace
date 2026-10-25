@@ -749,11 +749,6 @@ static ssize_t game_freq_bias_store(struct gov_attr_set *attr_set,
 	return count;
 }
 
-{
-	struct schedxsn_tunables *tunables = to_schedxsn_tunables(attr_set);
-
-	return sprintf(buf, "%d\n", tunables->freq_margin);
-}
 
 static ssize_t up_rate_limit_us_store(struct gov_attr_set *attr_set,
 				      const char *buf, size_t count)
