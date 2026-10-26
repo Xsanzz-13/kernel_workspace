@@ -21,7 +21,7 @@
 #include "sharkl3.dtsi"
 
 / {
-cpuinfo_hardware = "UNISOC SC9863A";
+	cpuinfo_hardware = "UNISOC SC9863A";
 
 	cpus {
 		#address-cells = <2>;
@@ -95,6 +95,7 @@ cpuinfo_hardware = "UNISOC SC9863A";
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 			capacity-dmips-mhz = <1024>;
+            sugov_slack_timer;
 		};
 
 		CPU3: cpu@300 {
@@ -107,6 +108,7 @@ cpuinfo_hardware = "UNISOC SC9863A";
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 			capacity-dmips-mhz = <1024>;
+            sugov_slack_timer;
 		};
 
 		CPU4: cpu@400 {
@@ -119,7 +121,6 @@ cpuinfo_hardware = "UNISOC SC9863A";
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
 			capacity-dmips-mhz = <1088>;
-			sugov_slack_timer;
 		};
 
 		CPU5: cpu@500 {
@@ -132,7 +133,6 @@ cpuinfo_hardware = "UNISOC SC9863A";
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
 			capacity-dmips-mhz = <1088>;
-			sugov_slack_timer;
 		};
 
 		CPU6: cpu@600 {
@@ -175,15 +175,14 @@ cpuinfo_hardware = "UNISOC SC9863A";
 				0		/* CORE_PD */
 			>;
 		};
-
 		CPU_COST_1: core-cost1 {
 			busy-cost-data = <
 				492	88	/* 768MHz */
 				672	130	/* 1050MHz */
 				784	168	/* 1225MHz */
 				896	212	/* 1400MHz */
+				960	250	/* 1500MHz */
 				1088	310	/* 1700MHz */
-				1152	360	/* 1800MHz */
 			>;
 			idle-cost-data = <
 				35		/* ACTIVE-IDLE */
@@ -191,7 +190,6 @@ cpuinfo_hardware = "UNISOC SC9863A";
 				0		/* CORE_PD */
 			>;
 		};
-
 		CLUSTER_COST_0: cluster-cost0 {
 			busy-cost-data = <
 				492	1	/* 768MHz */
@@ -206,15 +204,14 @@ cpuinfo_hardware = "UNISOC SC9863A";
 				0		/* CORE_PD */
 			>;
 		};
-
 		CLUSTER_COST_1: cluster-cost1 {
 			busy-cost-data = <
 				492	52	/* 768MHz */
 				672	68	/* 1050MHz */
 				784	85	/* 1225MHz */
 				896	105	/* 1400MHz */
+				960	123	/* 1500MHz */
 				1088	155	/* 1700MHz */
-				1152	180	/* 1800MHz */
 			>;
 			idle-cost-data = <
 				32		/* ACTIVE-IDLE */
@@ -229,263 +226,235 @@ cpuinfo_hardware = "UNISOC SC9863A";
 		entry-method = "arm,psci";
 		CORE_PD: core_pd {
 			compatible = "arm,idle-state";
-			entry-latency-us = <800>;
-			exit-latency-us = <250>;
-			min-residency-us = <2000>;
+			entry-latency-us = <600>;
+			exit-latency-us = <200>;
+			min-residency-us = <1500>;
 			local-timer-stop;
 			arm,psci-suspend-param = <0x00010000>;
 		};
 	};
 
 	cpufreq_clus0: cpufreq-clus0 {
-		cpufreq-cluster-id = <0>;
-		nvmem-cells = <&dvfs_bin_cpu0>;
-		nvmem-cell-names = "dvfs_bin";
-		sprd,cpufreq-temp-threshold = <70>;
-		clocks = <&aon_clk CLK_CORE0>,
-			<&aon_clk CLK_CORE1>,
-			<&aon_clk CLK_CORE2>,
-			<&aon_clk CLK_CORE3>,
-			<&pll CLK_TWPLL_768M>,
-			<&mpll CLK_MPLL0>;
-		clock-names = "core_clk",
-				"core1_clk",
-				"core2_clk",
-				"core3_clk",
-				"low_freq_clk_parent",
-				"high_freq_clk_parent";
-		clock-latency = <30000>;
-		voltage-tolerance = <6413>;
-		volt-share-masters-bits = <0x1>;
-		operating-points = <
-			/* kHz	uV */
-			1200000	1037500
-			1100000	987500
-			1000000	943750
-			884000	893750
-			768000	850000
-		>;
-		operating-points-1 = <
-			/* kHz	uV */
-			1200000	981250
-			1100000	937500
-			1000000	893750
-			884000	850000
-			768000	850000
-		>;
-		operating-points-2 = <
-			/* kHz	uV */
-			1200000	1018750
-			1100000	975000
-			1000000	931250
-			884000	881250
-			768000	850000
-		>;
-		operating-points-3 = <
-			/* kHz	uV */
-			1200000	1068750
-			1100000	1025000
-			1000000	981250
-			884000	931250
-			768000	881250
-		>;
-		operating-points-1-70 = <
-			/* kHz	uV */
-			1200000	1000000
-			1100000	956250
-			1000000	912500
-			884000	868750
-			768000	850000
-		>;
-		operating-points-2-70 = <
-			/* kHz	uV */
-			1200000	1037500
-			1100000	993750
-			1000000	950000
-			884000	900000
-			768000	856250
-		>;
-		operating-points-3-70 = <
-			/* kHz	uV */
-			1200000	1081250
-			1100000	1037500
-			1000000	993750
-			884000	943750
-			768000	893750
-		>;
+			cpufreq-cluster-id = <0>;
+			nvmem-cells = <&dvfs_bin_cpu0>;
+			nvmem-cell-names = "dvfs_bin";
+			sprd,cpufreq-temp-threshold = <70>;
+			clocks = <&aon_clk CLK_CORE0>,
+				<&aon_clk CLK_CORE1>,
+				<&aon_clk CLK_CORE2>,
+				<&aon_clk CLK_CORE3>,
+				<&pll CLK_TWPLL_768M>,
+				<&mpll CLK_MPLL0>;
+			clock-names = "core_clk",
+					"core1_clk",
+					"core2_clk",
+					"core3_clk",
+					"low_freq_clk_parent",
+					"high_freq_clk_parent";
+			clock-latency = <15000>;
+			voltage-tolerance = <6413>;
+			volt-share-masters-bits = <0x1>;
+			operating-points = <
+				/* kHz	uV */
+				1200000	1037500
+				1100000	987500
+				1000000	943750
+				884000	893750
+				768000	850000>;
+			operating-points-1 = <
+				/* kHz	uV */
+				1200000	981250
+				1100000	937500
+				1000000	893750
+				884000	850000
+				768000	850000>;
+			operating-points-2 = <
+				/* kHz	uV */
+				1200000	1018750
+				1100000	975000
+				1000000	931250
+				884000	881250
+				768000	850000>;
+			operating-points-3 = <
+				/* kHz	uV */
+				1200000	1068750
+				1100000	1025000
+				1000000	981250
+				884000	931250
+				768000	881250>;
+			operating-points-1-70 = <
+				/* kHz	uV */
+				1200000	1000000
+				1100000	956250
+				1000000	912500
+				884000	868750
+				768000	850000>;
+			operating-points-2-70 = <
+				/* kHz	uV */
+				1200000	1037500
+				1100000	993750
+				1000000	950000
+				884000	900000
+				768000	856250>;
+			operating-points-3-70 = <
+				/* kHz	uV */
+				1200000	1081250
+				1100000	1037500
+				1000000	993750
+				884000	943750
+				768000	893750>;
 	};
 
 	cpufreq_clus1: cpufreq-clus1 {
-		cpufreq-cluster-id = <1>;
-		nvmem-cells = <&dvfs_bin_cpu1>;
-		nvmem-cell-names = "dvfs_bin";
-		sprd,cpufreq-temp-threshold = <70>;
-		cpufreq-sub-clusters = <&cpufreq_fcm>;
-		clocks = <&aon_clk CLK_CORE4>,
-			<&aon_clk CLK_CORE5>,
-			<&aon_clk CLK_CORE6>,
-			<&aon_clk CLK_CORE7>,
-			<&pll CLK_TWPLL_768M>,
-			<&mpll CLK_MPLL1>;
-		clock-names = "core_clk",
-				"core1_clk",
-				"core2_clk",
-				"core3_clk",
-				"low_freq_clk_parent",
-				"high_freq_clk_parent";
-		clock-latency = <30000>;
-		voltage-tolerance = <0>;
-		volt-share-masters-bits = <0xa>;
-		freq-sync-slaves-bits = <0x8>;
-
-		operating-points = <
-			/* kHz	uV */
-			1800000	1118750
-			1700000	1087500
-			1400000	987500
-			1225000	937500
-			1050000	887500
-			768000	862500
-		>;
-
-		operating-points-1 = <
-			/* kHz	uV */
-			1800000	1068750
-			1700000	1037500
-			1400000	937500
-			1225000	887500
-			1050000	862500
-			768000	862500
-		>;
-
-		operating-points-2 = <
-			/* kHz	uV */
-			1800000	1106250
-			1700000	1075000
-			1400000	975000
-			1225000	925000
-			1050000	868750
-			768000	862500
-		>;
-
-		operating-points-3 = <
-			/* kHz	uV */
-			1800000	1162500
-			1700000	1125000
-			1400000	1012500
-			1225000	962500
-			1050000	906250
-			768000	862500
-		>;
-
-		operating-points-1-70 = <
-			/* kHz	uV */
-			1800000	1093750
-			1700000	1062500
-			1400000	962500
-			1225000	906250
-			1050000	862500
-			768000	862500
-		>;
-
-		operating-points-2-70 = <
-			/* kHz	uV */
-			1800000	1137500
-			1700000	1100000
-			1400000	987500
-			1225000	937500
-			1050000	887500
-			768000	862500
-		>;
-
-		operating-points-3-70 = <
-			/* kHz	uV */
-			1800000	1175000
-			1400000	1025000
-			1225000	975000
-			1050000	918750
-			768000	862500
-		>;
+			cpufreq-cluster-id = <1>;
+			nvmem-cells = <&dvfs_bin_cpu1>;
+			nvmem-cell-names = "dvfs_bin";
+			sprd,cpufreq-temp-threshold = <70>;
+			cpufreq-sub-clusters = <&cpufreq_fcm>;
+			clocks = <&aon_clk CLK_CORE4>,
+				<&aon_clk CLK_CORE5>,
+				<&aon_clk CLK_CORE6>,
+				<&aon_clk CLK_CORE7>,
+				<&pll CLK_TWPLL_768M>,
+				<&mpll CLK_MPLL1>;
+			clock-names = "core_clk",
+					"core1_clk",
+					"core2_clk",
+					"core3_clk",
+					"low_freq_clk_parent",
+					"high_freq_clk_parent";
+			clock-latency = <15000>;
+			voltage-tolerance = <0>;
+			volt-share-masters-bits = <0xa>;
+			freq-sync-slaves-bits = <0x8>;
+			operating-points = <
+				/* kHz	uV */
+				1700000	1087500
+				1500000	1025000
+				1400000	987500
+				1225000	937500
+				1050000	887500
+				768000	862500>;
+			operating-points-1 = <
+				/* kHz	uV */
+				1700000	1037500
+				1500000	975000
+				1400000	937500
+				1225000	887500
+				1050000	862500
+				768000	862500>;
+			operating-points-2 = <
+				/* kHz	uV */
+				1700000	1075000
+				1500000	1012500
+				1400000	975000
+				1225000	925000
+				1050000	868750
+				768000	862500>;
+			operating-points-3 = <
+				/* kHz	uV */
+				1700000	1125000
+				1500000	1050000
+				1400000	1012500
+				1225000	962500
+				1050000	906250
+				768000	862500>;
+			operating-points-1-70 = <
+				/* kHz	uV */
+				1700000	1062500
+				1500000	1000000
+				1400000	962500
+				1225000	906250
+				1050000	862500
+				768000	862500>;
+			operating-points-2-70 = <
+				/* kHz	uV */
+				1700000	1100000
+				1500000	1025000
+				1400000	987500
+				1225000	937500
+				1050000	887500
+				768000	862500>;
+			operating-points-3-70 = <
+				/* kHz	uV */
+				1700000	1137500
+				1400000	1025000
+				1225000	975000
+				1050000	918750
+				768000	862500>;
 	};
 
 	cpufreq_fcm: cpufreq-fcm {
-		cpufreq-cluster-id = <3>;
-		nvmem-cells = <&dvfs_bin_dsu>;
-		nvmem-cell-names = "dvfs_bin";
-		sprd,cpufreq-temp-threshold = <70>;
-		clocks = <&aon_clk CLK_SCU>,
-			<&pll CLK_TWPLL_768M>,
-			<&mpll CLK_MPLL2>;
-		clock-names = "clk",
-				"clk_low",
-				"clk_high";
-		clock-latency = <30000>;
-		voltage-tolerance = <0>;
-		volt-share-masters-bits = <0xa>;
-		freq-sync-hosts-bits = <0x2>;
-		operating-points = <
-			/* kHz	uV */
-			1250000	1050000
-			1172000	1018750
-			1095000	987500
-			959000	937500
-			824000	887500
-			768000	862500
-		>;
-		operating-points-1 = <
-			/* kHz	uV */
-			1250000	1000000
-			1172000	968750
-			1095000	937500
-			959000	887500
-			824000	862500
-			768000	862500
-		>;
-		operating-points-2 = <
-			/* kHz	uV */
-			1250000	1037500
-			1172000	1006250
-			1095000	975000
-			959000	925000
-			824000	868750
-			768000	862500
-		>;
-		operating-points-3 = <
-			/* kHz	uV */
-			1250000	1087500
-			1172000	1056250
-			1095000	1025000
-			959000	975000
-			824000	918750
-			768000	875000
-		>;
-		operating-points-1-70 = <
-			/* kHz	uV */
-			1250000	1018750
-			1172000	987500
-			1095000	956250
-			959000	906250
-			824000	862500
-			768000	862500
-		>;
-		operating-points-2-70 = <
-			/* kHz	uV */
-			1250000	1050000
-			1172000	1018750
-			1095000	987500
-			959000	937500
-			824000	887500
-			768000	862500
-		>;
-		operating-points-3-70 = <
-			/* kHz	uV */
-			1250000	1100000
-			1172000	1068750
-			1095000	1037500
-			959000	987500
-			824000	931250
-			768000	887500
-		>;
+			cpufreq-cluster-id = <3>;
+			nvmem-cells = <&dvfs_bin_dsu>;
+			nvmem-cell-names = "dvfs_bin";
+			sprd,cpufreq-temp-threshold = <70>;
+			clocks = <&aon_clk CLK_SCU>,
+				<&pll CLK_TWPLL_768M>,
+				<&mpll CLK_MPLL2>;
+			clock-names = "clk",
+					"clk_low",
+					"clk_high";
+			clock-latency = <15000>;
+			voltage-tolerance = <0>;
+			volt-share-masters-bits = <0xa>;
+			freq-sync-hosts-bits = <0x2>;
+			operating-points = <
+				/* kHz	uV */
+				1250000	1050000
+				1172000	1018750
+				1095000	987500
+				959000	937500
+				824000	887500
+				768000	862500>;
+			operating-points-1 = <
+				/* kHz	uV */
+				1250000	1000000
+				1172000	968750
+				1095000	937500
+				959000	887500
+				824000	862500
+				768000	862500>;
+			operating-points-2 = <
+				/* kHz	uV */
+				1250000	1037500
+				1172000	1006250
+				1095000	975000
+				959000	925000
+				824000	868750
+				768000	862500>;
+			operating-points-3 = <
+				/* kHz	uV */
+				1250000	1087500
+				1172000	1056250
+				1095000	1025000
+				959000	975000
+				824000	918750
+				768000	875000>;
+			operating-points-1-70 = <
+				/* kHz	uV */
+				1250000	1018750
+				1172000	987500
+				1095000	956250
+				959000	906250
+				824000	862500
+				768000	862500>;
+			operating-points-2-70 = <
+				/* kHz	uV */
+				1250000	1050000
+				1172000	1018750
+				1095000	987500
+				959000	937500
+				824000	887500
+				768000	862500>;
+			operating-points-3-70 = <
+				/* kHz	uV */
+				1250000	1100000
+				1172000	1068750
+				1095000	1037500
+				959000	987500
+				824000	931250
+				768000	887500>;
 	};
 
 	gic: interrupt-controller@14000000 {
