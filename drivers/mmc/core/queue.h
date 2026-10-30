@@ -81,6 +81,7 @@ struct mmc_queue {
 	struct request_queue	*queue;
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
 	struct mmc_queue_req	mqrq[EMMC_MAX_QUEUE_DEPTH];
+	bool			cmdq_thread_owner;
 #endif
 	/*
 	 * FIXME: this counter is not a very reliable way of keeping
