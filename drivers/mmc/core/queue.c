@@ -224,6 +224,18 @@ static struct scatterlist *mmc_alloc_sg(int sg_len, gfp_t gfp)
 	return sg;
 }
 
+#ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
+static void mmc_free_cmdq_sg(struct mmc_queue *mq)
+{
+	int i;
+
+	for (i = 0; i < EMMC_MAX_QUEUE_DEPTH; i++) {
+		kfree(mq->mqrq[i].sg);
+		mq->mqrq[i].sg = NULL;
+	}
+}
+#endif
+
 static void mmc_queue_setup_discard(struct request_queue *q,
 				    struct mmc_card *card)
 {
@@ -320,54 +332,13 @@ int mmc_init_queue(struct mmc_queue *mq, struct mmc_card *card,
 	int ret = -ENOMEM;
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
 	int i;
+	bool cmdq_thread_started = false;
 #endif
 
 	if (mmc_dev(host)->dma_mask && *mmc_dev(host)->dma_mask)
 		limit = (u64)dma_max_pfn(mmc_dev(host)) << PAGE_SHIFT;
 
 	mq->card = card;
-#if defined(CONFIG_EMMC_SOFTWARE_CQ_SUPPORT)
-	if (card->ext_csd.cmdq_support &&
-		(area_type == MMC_BLK_DATA_AREA_MAIN)) {
-#ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
-		if (!(host->caps2 & MMC_CAP2_CQE)) {
-			pr_notice("%s: init cq\n", mmc_hostname(host));
-			atomic_set(&host->cq_rw, false);
-			atomic_set(&host->cq_w, false);
-			atomic_set(&host->cq_wait_rdy, 0);
-			host->wp_error = 0;
-			host->task_id_index = 0;
-			atomic_set(&host->is_data_dma, 0);
-			host->cur_rw_task = CQ_TASK_IDLE;
-			atomic_set(&host->cq_tuning_now, 0);
-
-			for (i = 0; i < EMMC_MAX_QUEUE_DEPTH; i++) {
-				host->data_mrq_queued[i] = false;
-				atomic_set(&mq->mqrq[i].index, 0);
-			}
-
-			host->cmdq_thread = kthread_run(mmc_cmd_queue_thread,
-				host,
-				"mmc_cq/%d", host->index);
-			if (IS_ERR(host->cmdq_thread)) {
-				pr_notice("%s: %d: cmdq: failed to start mmc_cq thread\n",
-					mmc_hostname(host), ret);
-			}
-#if defined(CONFIG_EMMC_SOFTWARE_CQ_BIND_CPUS)
-			/* bind this thread to cpus except cpu0/1
-			 * because cpu 0/1 will handle interrupt
-			 */
-			cpu_num = nr_cpu_ids;
-			for (i = 0; i < cpu_num; i++)
-				cpumask_clear_cpu(i, &cpumasks);
-			for (i = 2; i < cpu_num; i++)
-				cpumask_set_cpu(i, &cpumasks);
-			set_cpus_allowed_ptr(host->cmdq_thread, &cpumasks);
-#endif
-		}
-#endif
-	}
-#endif
 	mq->queue = blk_alloc_queue(GFP_KERNEL);
 	if (!mq->queue)
 		return -ENOMEM;
@@ -416,6 +387,43 @@ int mmc_init_queue(struct mmc_queue *mq, struct mmc_card *card,
 				goto cleanup_queue;
 		}
 	}
+
+	if (card->ext_csd.cmdq_support &&
+	    area_type == MMC_BLK_DATA_AREA_MAIN &&
+	    !(host->caps2 & MMC_CAP2_CQE)) {
+		pr_notice("%s: init cq\n", mmc_hostname(host));
+		atomic_set(&host->cq_rw, false);
+		atomic_set(&host->cq_w, false);
+		atomic_set(&host->cq_wait_rdy, 0);
+		host->wp_error = 0;
+		host->task_id_index = 0;
+		atomic_set(&host->is_data_dma, 0);
+		host->cur_rw_task = CQ_TASK_IDLE;
+		atomic_set(&host->cq_tuning_now, 0);
+
+		for (i = 0; i < EMMC_MAX_QUEUE_DEPTH; i++) {
+			host->data_mrq_queued[i] = false;
+			atomic_set(&mq->mqrq[i].index, 0);
+		}
+
+		host->cmdq_thread = kthread_run(mmc_cmd_queue_thread,
+			host, "mmc_cq/%d", host->index);
+		if (IS_ERR(host->cmdq_thread)) {
+			ret = PTR_ERR(host->cmdq_thread);
+			host->cmdq_thread = NULL;
+			goto cleanup_queue;
+		}
+		mq->cmdq_thread_owner = true;
+		cmdq_thread_started = true;
+#if defined(CONFIG_EMMC_SOFTWARE_CQ_BIND_CPUS)
+		cpu_num = nr_cpu_ids;
+		for (i = 0; i < cpu_num; i++)
+			cpumask_clear_cpu(i, &cpumasks);
+		for (i = 2; i < cpu_num; i++)
+			cpumask_set_cpu(i, &cpumasks);
+		set_cpus_allowed_ptr(host->cmdq_thread, &cpumasks);
+#endif
+	}
 #endif
 	sema_init(&mq->thread_sem, 1);
 
@@ -456,6 +464,14 @@ int mmc_init_queue(struct mmc_queue *mq, struct mmc_card *card,
 
 cleanup_queue:
 	blk_cleanup_queue(mq->queue);
+#ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
+	if (cmdq_thread_started) {
+		kthread_stop(host->cmdq_thread);
+		host->cmdq_thread = NULL;
+		mq->cmdq_thread_owner = false;
+	}
+	mmc_free_cmdq_sg(mq);
+#endif
 	return ret;
 }
 
@@ -484,6 +500,14 @@ void mmc_cleanup_queue(struct mmc_queue *mq)
 
 	if (likely(!blk_queue_dead(q)))
 		blk_cleanup_queue(q);
+#ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
+	if (mq->cmdq_thread_owner) {
+		kthread_stop(mq->card->host->cmdq_thread);
+		mq->card->host->cmdq_thread = NULL;
+		mq->cmdq_thread_owner = false;
+	}
+	mmc_free_cmdq_sg(mq);
+#endif
 	mq->card = NULL;
 }
 EXPORT_SYMBOL(mmc_cleanup_queue);
