@@ -2543,7 +2543,7 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	enum lru_list lru;
 
 #ifdef CONFIG_DIRECT_SWAPPINESS
-	if (!current_is_kswapd())
+	if (!current_is_kswapd() && global_reclaim(sc))
 		swappiness = READ_ONCE(direct_vm_swappiness);
 #endif
 
