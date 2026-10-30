@@ -49,7 +49,7 @@ static unsigned long pressure_max = 90;
 module_param_named(pressure_min, pressure_min, ulong, 0644);
 module_param_named(pressure_max, pressure_max, ulong, 0644);
 
-static short min_score_adj = 360;
+static short min_score_adj = 500;
 module_param_named(min_score_adj, min_score_adj, short, 0644);
 
 /*
@@ -102,13 +102,15 @@ struct selected_task {
 
 int selected_cmp(const void *a, const void *b)
 {
-	const struct selected_task *x = a;
-	const struct selected_task *y = b;
-	int ret;
+    const struct selected_task *x = a;
+    const struct selected_task *y = b;
 
-	ret = x->tasksize < y->tasksize ? -1 : 1;
+    if (x->tasksize < y->tasksize)
+        return -1;
+    if (x->tasksize > y->tasksize)
+        return 1;
 
-	return ret;
+    return 0;
 }
 
 static int test_task_flag(struct task_struct *p, int flag)
