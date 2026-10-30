@@ -244,31 +244,38 @@ static int mmc_reset_for_cmdq(struct mmc_host *host)
 
 	emmc_resetting_when_cmdq = 1;
 	err = mmc_hw_reset(host);
+
 	/* Ensure we switch back to the correct partition */
 	if (err != -EOPNOTSUPP) {
 		u8 part_config = host->card->ext_csd.part_config;
 
 		part_config &= ~EXT_CSD_PART_CONFIG_ACC_MASK;
-		/*  only enable cq at user */
+		/* only enable cq at user */
 		part_config |= 0;
 
 		ret = mmc_switch(host->card, EXT_CSD_CMD_SET_NORMAL,
 				EXT_CSD_PART_CONFIG, part_config,
 				host->card->ext_csd.part_time);
-		if (ret)
-			return ret;
+		if (ret) {
+			err = ret;
+			goto out;
+		}
 
 		/* enable cmdq at all partition */
 		ret = mmc_cmdq_enable(host->card);
-		if (ret)
-			return ret;
+		if (ret) {
+			err = ret;
+			goto out;
+		}
 
 		host->card->ext_csd.part_config = part_config;
-
 	}
+
+out:
 	emmc_resetting_when_cmdq = 0;
 	return err;
 }
+
 
 /*
  *	check CMDQ QSR
