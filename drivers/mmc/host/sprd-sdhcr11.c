@@ -463,7 +463,7 @@ static int sprd_sdhc_adma_table_pre(struct sprd_sdhc_host *host,
 	host->sg_count = sdhci_pre_dma_transfer(host, data);
 
 	if (host->sg_count <= 0)
-		return -EINVAL;
+		return host->sg_count < 0 ? host->sg_count : -EINVAL;
 
 	desc = host->adma_desc;
 	align = host->align_buffer;
@@ -596,22 +596,30 @@ static void sprd_sdhc_dma_unmap(struct sprd_sdhc_host *host)
 	}
 }
 
-static void sprd_admd_mode(struct sprd_sdhc_host *host, struct mmc_data *data)
+static int sprd_admd_mode(struct sprd_sdhc_host *host, struct mmc_data *data)
 {
+	int ret;
 
 	if (host->flags & SPRD_USE_64_BIT_DMA)
 		sprd_sdhc_set_64bit_addr(host, 1);
 
 	sprd_sdhc_set_adma2_len(host);
 	sprd_sdhc_set_dma(host, SPRD_SDHC_BIT_32ADMA_MOD);
-	sprd_sdhc_adma_table_pre(host, data);
+
+	ret = sprd_sdhc_adma_table_pre(host, data);
+	if (ret)
+		return ret;
+
 	sprd_sdhc_writel(host,
 		(u32)host->adma_addr,
 		SPRD_SDHC_REG_32_ADMA2_ADDR_L);
+
 	if (host->flags & SPRD_USE_64_BIT_DMA)
 		sprd_sdhc_writel(host,
 			(u32)((u64)host->adma_addr >> 32),
 			SPRD_SDHC_REG_32_ADMA2_ADDR_H);
+
+	return 0;
 }
 
 static void sprd_sdmd_mode(struct sprd_sdhc_host *host, struct mmc_data *data)
@@ -692,6 +700,7 @@ static void sprd_send_cmd(struct sprd_sdhc_host *host, struct mmc_command *cmd)
 	int if_mult = 0;
 	int if_read = 0;
 	int if_dma = 0;
+	int ret;
 	u16 auto_cmd = SPRD_SDHC_BIT_ACMD_DIS;
 #ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
 	u32 intmask;
@@ -765,8 +774,20 @@ static void sprd_send_cmd(struct sprd_sdhc_host *host, struct mmc_command *cmd)
 			}
 		}
 		if (host->flags & SPRD_USE_ADMA) {
-			sprd_admd_mode(host, data);
+			ret = sprd_admd_mode(host, data);
+			if (ret) {
+				dev_err(dev,
+					"ADMA setup failed for CMD%d: %d\n",
+					cmd->opcode, ret);
+				data->error = ret;
+				data->bytes_xfered = 0;
+				del_timer(&host->timer);
+				sprd_sdhc_disable_all_int(host);
+				tasklet_schedule(&host->finish_tasklet);
+				return;
+			}
 			flag |= SPRD_SDHC_BIT_INT_ERR_ADMA;
+
 		} else
 			sprd_sdmd_mode(host, data);
 	}
