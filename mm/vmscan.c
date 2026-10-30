@@ -165,10 +165,12 @@ int vm_swappiness = 60;
 
 #ifdef CONFIG_DIRECT_SWAPPINESS
 /*
- * Direct reclaim swappiness, exptct 0 - 60. Higher means more
- * swappy and slower.
+ * Direct reclaim swappiness. Higher values reclaim anonymous pages
+ * more aggressively, which can free RAM through swap but may increase
+ * direct-reclaim latency. Keep this lower than background swappiness
+ * to avoid excessive stalls in allocation paths.
  */
-int direct_vm_swappiness = 60;
+int direct_vm_swappiness = 80;
 #endif
 
 /*
@@ -2471,8 +2473,42 @@ static ssize_t am_app_launch_store(struct kobject *kobj,
 		__ATTR(_name, 0644, _name##_show, _name##_store)
 MEM_BOOST_ATTR(am_app_launch);
 
+#ifdef CONFIG_DIRECT_SWAPPINESS
+static ssize_t direct_swappiness_show(struct kobject *kobj,
+				      struct kobj_attribute *attr,
+				      char *buf)
+{
+	return sprintf(buf, "%d\n", READ_ONCE(direct_vm_swappiness));
+}
+
+static ssize_t direct_swappiness_store(struct kobject *kobj,
+				       struct kobj_attribute *attr,
+				       const char *buf, size_t count)
+{
+	int swappiness;
+	int err;
+
+	err = kstrtoint(buf, 10, &swappiness);
+	if (err)
+		return err;
+
+	if (swappiness < 0 || swappiness > 200)
+		return -EINVAL;
+
+	WRITE_ONCE(direct_vm_swappiness, swappiness);
+	return count;
+}
+
+static struct kobj_attribute direct_swappiness_attr =
+	__ATTR(direct_swappiness, 0644,
+	       direct_swappiness_show, direct_swappiness_store);
+#endif
+
 static struct attribute *vmscan_attrs[] = {
 	&am_app_launch_attr.attr,
+#ifdef CONFIG_DIRECT_SWAPPINESS
+	&direct_swappiness_attr.attr,
+#endif
 	NULL,
 };
 
@@ -2508,7 +2544,7 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 
 #ifdef CONFIG_DIRECT_SWAPPINESS
 	if (!current_is_kswapd())
-		swappiness = direct_vm_swappiness;
+		swappiness = READ_ONCE(direct_vm_swappiness);
 #endif
 
 	/* If we have no swap space, do not bother scanning anon pages. */
