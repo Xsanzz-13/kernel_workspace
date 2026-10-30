@@ -2753,7 +2753,8 @@ static int mmc_get_cmdq_index(struct mmc_queue *mq)
 	/* cmdq should be enabled when calling this function */
 	WARN_ON(!mmc_card_cmdq(mq->card));
 
-	for (i = 0; i < mq->card->ext_csd.cmdq_depth; i++) {
+	for (i = 0; i < mq->card->ext_csd.cmdq_depth &&
+	     i < EMMC_MAX_QUEUE_DEPTH; i++) {
 		if (!atomic_read(&mq->mqrq[i].index))
 			break;
 	}
@@ -2846,7 +2847,16 @@ void mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 				int index = 0;
 
 				index = mmc_get_cmdq_index(mq);
-				WARN_ON(index >= card->ext_csd.cmdq_depth);
+				if (index >= card->ext_csd.cmdq_depth ||
+				    index >= EMMC_MAX_QUEUE_DEPTH) {
+					pr_err("%s: no free CMDQ slot (index=%d depth=%u)\n",
+					       __func__, index,
+					       card->ext_csd.cmdq_depth);
+					blk_end_request_all(req, BLK_STS_IOERR);
+					card->host->context_info.is_waiting_last_req = false;
+					mmc_put_card(card);
+					return;
+				}
 				mq->mqrq[index].req = req;
 				atomic_set(&req_to_mmc_queue_req(req)->index,
 					index + 1);
