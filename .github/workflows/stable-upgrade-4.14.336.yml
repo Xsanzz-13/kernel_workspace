@@ -576,6 +576,162 @@ jobs:
                 echo "LOCALLY_PORTED: net/ipv6/syncookies.c"
               } | tee -a "$REPORT"
 
+            elif [ "$version" = "209" ] && [ "$next_version" = "210" ]; then
+              FILTERED="$PATCH_DIR/patch-209-210.filtered.patch"
+
+              # Port three upstream hunks whose surrounding downstream code differs.
+              if ! awk '
+                BEGIN {
+                  excluded["arch/arm64/include/asm/pgtable.h"] = 1
+                  excluded["drivers/scsi/ufs/ufshcd.c"] = 1
+                  excluded["drivers/usb/gadget/function/f_midi.c"] = 1
+                }
+                /^diff --git / {
+                  path = $3
+                  sub(/^a\//, "", path)
+                  skip = (path in excluded)
+                }
+                !skip { print }
+              ' "$patch_text" > "$FILTERED"; then
+                echo "Failed to filter 209-210 patch." > "$LOG"
+                fail_patch "209 -> 210 (filter failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$FILTERED" > "$LOG" 2>&1; then
+                fail_patch "209 -> 210 (official patch unresolved)"
+              fi
+
+              if ! python3 - <<'PY' > "$LOG" 2>&1
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              source = p.read_text()
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one exact source match, found {count}")
+              p.write_text(source.replace(old, new, 1))
+
+          # Preserve hardware dirty state in pte_wrprotect(), not only in
+          # ptep_set_wrprotect(), as required by upstream commit ff1712f.
+          replace_once(
+              "arch/arm64/include/asm/pgtable.h",
+              "static inline pte_t pte_wrprotect(pte_t pte)\n"
+              "{\n"
+              "\tpte = clear_pte_bit(pte, __pgprot(PTE_WRITE));\n"
+              "\tpte = set_pte_bit(pte, __pgprot(PTE_RDONLY));\n"
+              "\treturn pte;\n"
+              "}\n",
+              "static inline pte_t pte_wrprotect(pte_t pte)\n"
+              "{\n"
+              "\t/*\n"
+              "\t * If hardware-dirty (PTE_WRITE/DBM bit set and PTE_RDONLY\n"
+              "\t * clear), set the PTE_DIRTY bit.\n"
+              "\t */\n"
+              "\tif (pte_hw_dirty(pte))\n"
+              "\t\tpte = pte_mkdirty(pte);\n"
+              "\n"
+              "\tpte = clear_pte_bit(pte, __pgprot(PTE_WRITE));\n"
+              "\tpte = set_pte_bit(pte, __pgprot(PTE_RDONLY));\n"
+              "\treturn pte;\n"
+              "}\n",
+          )
+          replace_once(
+              "arch/arm64/include/asm/pgtable.h",
+              "\t\t/*\n"
+              "\t\t * If hardware-dirty (PTE_WRITE/DBM bit set and PTE_RDONLY\n"
+              "\t\t * clear), set the PTE_DIRTY bit.\n"
+              "\t\t */\n"
+              "\t\tif (pte_hw_dirty(pte))\n"
+              "\t\t\tpte = pte_mkdirty(pte);\n",
+              "",
+          )
+
+          # Let the PM runtime core serialize shutdown with runtime resume,
+          # preserving this tree's local RPMB removal step.
+          replace_once(
+              "drivers/scsi/ufs/ufshcd.c",
+              "\tif (pm_runtime_suspended(hba->dev)) {\n"
+              "\t\tret = ufshcd_runtime_resume(hba);\n"
+              "\t\tif (ret)\n"
+              "\t\t\tgoto out;\n"
+              "\t}\n\n"
+              "\tufshcd_rpmb_remove(hba);",
+              "\tpm_runtime_get_sync(hba->dev);\n\n"
+              "\tufshcd_rpmb_remove(hba);",
+          )
+
+          # Free midi->id on allocation failures after it has been allocated.
+          replace_once(
+              "drivers/usb/gadget/function/f_midi.c",
+              "\tif (opts->id && !midi->id) {\n"
+              "\t\tstatus = -ENOMEM;\n"
+              "\t\tgoto setup_fail;\n"
+              "\t}",
+              "\tif (opts->id && !midi->id) {\n"
+              "\t\tstatus = -ENOMEM;\n"
+              "\t\tgoto midi_free;\n"
+              "\t}",
+          )
+          replace_once(
+              "drivers/usb/gadget/function/f_midi.c",
+              "\tstatus = kfifo_alloc(&midi->in_req_fifo, midi->qlen, GFP_KERNEL);\n"
+              "\tif (status)\n"
+              "\t\tgoto setup_fail;",
+              "\tstatus = kfifo_alloc(&midi->in_req_fifo, midi->qlen, GFP_KERNEL);\n"
+              "\tif (status)\n"
+              "\t\tgoto midi_free;",
+          )
+          replace_once(
+              "drivers/usb/gadget/function/f_midi.c",
+              "setup_fail:\n"
+              "\tmutex_unlock(&opts->lock);\n"
+              "\tkfree(midi);\n"
+              "\treturn ERR_PTR(status);",
+              "midi_free:\n"
+              "\tif (midi)\n"
+              "\t\tkfree(midi->id);\n"
+              "\tkfree(midi);\n"
+              "setup_fail:\n"
+              "\tmutex_unlock(&opts->lock);\n"
+              "\treturn ERR_PTR(status);",
+          )
+
+          # Assert each adapted upstream change before the stage can continue.
+          pg = Path("arch/arm64/include/asm/pgtable.h").read_text()
+          wr = re.search(r"static inline pte_t pte_wrprotect\(pte_t pte\)\s*\{(.*?)\n\}", pg, re.S)
+          assert wr and "if (pte_hw_dirty(pte))" in wr.group(1)
+          ps = re.search(r"static inline void ptep_set_wrprotect\([^)]*\)\s*\{(.*?)\n\}", pg, re.S)
+          assert ps and "pte_hw_dirty" not in ps.group(1)
+
+          ufs = Path("drivers/scsi/ufs/ufshcd.c").read_text()
+          shutdown = re.search(r"int ufshcd_shutdown\(struct ufs_hba \*hba\)(.*?)EXPORT_SYMBOL\(ufshcd_shutdown\);", ufs, re.S)
+          assert shutdown and "pm_runtime_get_sync(hba->dev);" in shutdown.group(1)
+          assert "pm_runtime_suspended(hba->dev)" not in shutdown.group(1)
+
+          midi = Path("drivers/usb/gadget/function/f_midi.c").read_text()
+          alloc = re.search(r"static struct usb_function \*f_midi_alloc\(.*?\n\}", midi, re.S)
+          assert alloc and alloc.group(0).count("midi_free:") == 1
+          assert "goto midi_free;" in alloc.group(0)
+          assert "kfree(midi->id);" in alloc.group(0)
+          print("LOCALLY_PORTED: arm64 pte_wrprotect hardware-dirty preservation")
+          print("LOCALLY_PORTED: UFS shutdown/runtime-resume serialization")
+          print("LOCALLY_PORTED: f_midi_alloc error-path midi->id cleanup")
+          print("VERIFIED: all three downstream ports match expected source invariants")
+          PY
+              then
+                fail_patch "209 -> 210 (downstream port verification failed)"
+              fi
+              cat "$LOG" | tee -a "$REPORT"
+
+              {
+                echo "LOCALLY_PORTED: arch/arm64/include/asm/pgtable.h"
+                echo "LOCALLY_PORTED: drivers/scsi/ufs/ufshcd.c"
+                echo "LOCALLY_PORTED: drivers/usb/gadget/function/f_midi.c"
+              } | tee -a "$REPORT"
+
             else
               # Normal strict patching for all other increments
               if ! patch --batch --forward --fuzz=0 -p1 \
