@@ -206,25 +206,26 @@ jobs:
                 fail_patch "Override patch tidak ditemukan: $OVERRIDE"
 
               # Remove files handled by the local conflict patch.
-              awk '
-                /^diff --git / {
-                  path = $3
-                  sub(/^a\//, "", path)
-
-                  skip = (
-                    path == "drivers/usb/dwc3/gadget.c" ||
-                    path == "include/linux/debugfs.h" ||
-                    path == "lib/string.c" ||
-                    path == "mm/memory.c" ||
-                    path == "mm/mmap.c"
-                  )
+               if ! awk '
+                   BEGIN {
+                   excluded["drivers/usb/dwc3/gadget.c"] = 1
+                   excluded["include/linux/debugfs.h"] = 1
+                   excluded["lib/string.c"] = 1
+                  excluded["mm/memory.c"] = 1
+                  excluded["mm/mmap.c"] = 1
                 }
 
-                !skip { print }
-              ' "$patch_text" > "$FILTERED"
+                   /^diff --git / {
+                     path = $3
+                     sub(/^a\//, "", path)
+                     skip = (path in excluded)
+                }
 
-              [ -s "$FILTERED" ] ||
-                fail_patch "Filtered official patch kosong."
+                   !skip { print }
+                  ' "$patch_text" > "$FILTERED"; then
+                    echo "Failed to filter official patch." > "$LOG"
+                    fail_patch "$version -> $next_version (filter failed)"
+                    fi
 
               # Official patch for all other files.
               if ! patch --batch --forward --fuzz=0 -p1 \
