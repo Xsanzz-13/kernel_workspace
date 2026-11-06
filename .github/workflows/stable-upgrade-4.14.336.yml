@@ -160,9 +160,6 @@ jobs:
             if ! xz -dc "$patch_file" > "$patch_text" 2> "$LOG"; then
               fail_patch "$version -> $next_version (decompression)"
             fi
-            if ! patch --dry-run --batch --forward --fuzz=0 -p1 < "$patch_text" > "$LOG" 2>&1; then
-              fail_patch "$version -> $next_version (dry-run conflict)"
-            fi
             if ! patch --batch --forward --fuzz=0 -p1 < "$patch_text" > "$LOG" 2>&1; then
               fail_patch "$version -> $next_version (apply failed)"
             fi
