@@ -1,0 +1,828 @@
+name: Linux 4.14.199 to 4.14.210 (isolated checkpoint)
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Checkpoint khusus 4.14.199 -> 4.14.210"
+        required: true
+        type: choice
+        options: ["1"]
+        default: "1"
+      mode:
+        description: "audit = laporan saja; apply = commit jika semua patch bersih"
+        required: true
+        type: choice
+        options: [audit, apply]
+        default: audit
+
+permissions:
+  contents: write
+
+concurrency:
+  group: linux-414-checkpoint-210-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  upgrade:
+    if: github.ref == 'refs/heads/upstream-4.14.336'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: upstream-4.14.336
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Prepare report
+        env:
+          STAGE: ${{ inputs.stage || '1' }}
+          MODE: ${{ inputs.mode || 'audit' }}
+        run: |
+          {
+            echo "Linux stable patch upgrade"
+            echo "Repository: $GITHUB_REPOSITORY"
+            echo "Branch: $GITHUB_REF_NAME"
+            echo "Stage: $STAGE"
+            echo "Mode: $MODE"
+            echo "Started: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo ""
+          } > "$RUNNER_TEMP/patch-report.txt"
+
+      - name: Verify branch and source baseline
+        id: range
+        env:
+          STAGE: ${{ inputs.stage || '1' }}
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "ERROR: $*" | tee -a "$RUNNER_TEMP/patch-report.txt"
+            exit 1
+          }
+
+          [ "$GITHUB_REF" = "refs/heads/upstream-4.14.336" ] ||
+            fail "Workflow hanya boleh berjalan pada branch upstream-4.14.336."
+
+          EXPECTED_BASE="3fe25c27900b793ca2ff03a0355b94acc8170722"
+
+          git merge-base --is-ancestor "$EXPECTED_BASE" HEAD ||
+            fail "HEAD bukan turunan dari baseline: $EXPECTED_BASE"
+
+          VERSION=$(awk '$1 == "VERSION" && $2 == "=" {print $3; exit}' Makefile)
+          PATCHLEVEL=$(awk '$1 == "PATCHLEVEL" && $2 == "=" {print $3; exit}' Makefile)
+          SUBLEVEL=$(awk '$1 == "SUBLEVEL" && $2 == "=" {print $3; exit}' Makefile)
+
+          [ "$VERSION" = "4" ] || fail "VERSION bukan 4."
+          [ "$PATCHLEVEL" = "14" ] || fail "PATCHLEVEL bukan 14."
+
+          case "$STAGE" in
+            1) FROM_VERSION=199; TO_VERSION=210 ;;
+            2) FROM_VERSION=250; TO_VERSION=300 ;;
+            3) FROM_VERSION=300; TO_VERSION=336 ;;
+            *) fail "Stage tidak dikenal: $STAGE" ;;
+          esac
+
+          [ "$SUBLEVEL" = "$FROM_VERSION" ] ||
+            fail "Stage $STAGE membutuhkan 4.14.$FROM_VERSION, ditemukan 4.14.$SUBLEVEL."
+
+          [ -d "KernelSU-Next/kernel" ] ||
+            fail "KernelSU-Next/kernel tidak ditemukan."
+
+          [ -L "drivers/kernelsu" ] ||
+            fail "drivers/kernelsu bukan symlink."
+
+          [ "$(readlink drivers/kernelsu)" = "../KernelSU-Next/kernel" ] ||
+            fail "Target symlink drivers/kernelsu berubah."
+
+          {
+            echo "Baseline commit: $EXPECTED_BASE"
+            echo "Starting HEAD: $(git rev-parse HEAD)"
+            echo "Detected source: 4.14.$SUBLEVEL"
+            echo "Target stage: 4.14.$FROM_VERSION -> 4.14.$TO_VERSION"
+            echo "KernelSU-Next directory and symlink: OK"
+            echo ""
+          } | tee -a "$RUNNER_TEMP/patch-report.txt"
+
+          echo "from=$FROM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "to=$TO_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install patch utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xz-utils patch
+
+      - name: Apply official incremental stable patches
+        env:
+          FROM_VERSION: ${{ steps.range.outputs.from }}
+          TO_VERSION: ${{ steps.range.outputs.to }}
+        run: |
+          set -euo pipefail
+
+          PATCH_DIR="$RUNNER_TEMP/kernel-stable-patches"
+          REPORT="$RUNNER_TEMP/patch-report.txt"
+          LOG="$RUNNER_TEMP/current-patch.log"
+
+          mkdir -p "$PATCH_DIR"
+
+          save_partial_diff() {
+            git diff --name-only HEAD \
+              > "$RUNNER_TEMP/changed-files.txt" || true
+
+            git diff --stat HEAD \
+              > "$RUNNER_TEMP/diff-stat.txt" || true
+
+            git diff --binary HEAD \
+              > "$RUNNER_TEMP/upstream-stage.patch" || true
+
+            git diff --check HEAD \
+              > "$RUNNER_TEMP/whitespace-check.txt" 2>&1 || true
+
+            find . -type f \( -name '*.rej' -o -name '*.orig' \) -print0 |
+              tar --null -czf "$RUNNER_TEMP/reject-files.tar.gz" -T - \
+              || true
+
+            grep -Ei \
+              '(^kernel/sched/|^include/linux/sched|^KernelSU-Next/|^drivers/kernelsu|sprd|unisoc|sharkl3|sc9863a|powervr|pvr|walt|schedtune)' \
+              "$RUNNER_TEMP/changed-files.txt" \
+              > "$RUNNER_TEMP/review-files.txt" || true
+          }
+
+          fail_patch() {
+            save_partial_diff
+
+            {
+              echo ""
+              echo "FAILED: $1"
+              echo "Patch output:"
+              cat "$LOG" 2>/dev/null || true
+              echo ""
+              echo "Partial changes attached; nothing was pushed."
+            } | tee -a "$REPORT"
+
+            cp "$LOG" "$RUNNER_TEMP/failed-patch.log" 2>/dev/null || true
+            exit 1
+          }
+
+          # Smart wrapper: rejected hunks are skipped only when their reverse
+          # dry-run proves the upstream result is already present in the tree.
+          patch() {
+            local input="$PATCH_DIR/smart-patch-input.diff"
+            local check_log="$PATCH_DIR/smart-reverse-check.log"
+            local rc=0
+            local unresolved=0
+            local rejects=()
+            local rej
+
+            cat > "$input"
+            if command patch "$@" < "$input"; then
+              return 0
+            else
+              rc=$?
+            fi
+
+            case " $* " in
+              *" --forward "*) ;;
+              *) return "$rc" ;;
+            esac
+
+            mapfile -d '' rejects < <(find . -type f -name '*.rej' -print0)
+            [ "${#rejects[@]}" -gt 0 ] || return "$rc"
+
+            for rej in "${rejects[@]}"; do
+              if command patch --batch --reverse --dry-run --fuzz=0 -p0 < "$rej" > "$check_log" 2>&1; then
+                echo "ALREADY_PRESENT: ${rej#./} (reverse hunk check passed)" | tee -a "$REPORT" >&2
+                rm -f "$rej"
+              else
+                echo "UNRESOLVED_HUNK: ${rej#./}" | tee -a "$REPORT" >&2
+                cat "$check_log" >&2
+                unresolved=1
+              fi
+            done
+
+            if [ "$unresolved" -eq 0 ]; then
+              find . -type f -name '*.orig' -delete
+              echo "SMART_PATCH_RECOVERED: rejected hunks verified already present" | tee -a "$REPORT" >&2
+              return 0
+            fi
+            return 1
+          }
+
+          echo "Patch source: https://cdn.kernel.org/pub/linux/kernel/v4.x/incr/" |
+            tee -a "$REPORT"
+
+          echo "Strict mode: --batch --forward --fuzz=0" |
+            tee -a "$REPORT"
+
+          for ((version=FROM_VERSION; version<TO_VERSION; version++)); do
+            next_version=$((version + 1))
+
+            patch_name="patch-4.14.$version-$next_version.xz"
+            patch_file="$PATCH_DIR/$patch_name"
+            patch_text="$PATCH_DIR/$patch_name.patch"
+
+            patch_url="https://cdn.kernel.org/pub/linux/kernel/v4.x/incr/$patch_name"
+
+            if ! curl --fail --location --retry 5 --retry-all-errors \
+              --connect-timeout 30 --max-time 300 \
+              "$patch_url" -o "$patch_file"; then
+              echo "Download failed: $patch_url" > "$LOG"
+              fail_patch "$version -> $next_version (download)"
+            fi
+
+            if ! xz -t "$patch_file" > "$LOG" 2>&1; then
+              fail_patch "$version -> $next_version (invalid XZ)"
+            fi
+
+            if ! xz -dc "$patch_file" > "$patch_text" 2> "$LOG"; then
+              fail_patch "$version -> $next_version (decompression)"
+            fi
+
+            # 4.14.199 -> 4.14.200
+            if [ "$version" = "199" ] && [ "$next_version" = "200" ]; then
+              OVERRIDE="patch-overrides/4.14.199-200.local.patch"
+              FILTERED="$PATCH_DIR/patch-199-200.filtered.patch"
+
+              [ -s "$OVERRIDE" ] ||
+                fail_patch "Override patch kosong/tidak ditemukan: $OVERRIDE"
+
+              if ! awk '
+                BEGIN {
+                  excluded["drivers/usb/dwc3/gadget.c"] = 1
+                  excluded["include/linux/debugfs.h"] = 1
+                  excluded["lib/string.c"] = 1
+                  excluded["mm/memory.c"] = 1
+                  excluded["mm/mmap.c"] = 1
+                }
+
+                /^diff --git / {
+                  path = $3
+                  sub(/^a\//, "", path)
+                  skip = (path in excluded)
+                }
+
+                !skip { print }
+              ' "$patch_text" > "$FILTERED"; then
+                echo "Failed to filter 199-200 patch." > "$LOG"
+                fail_patch "199 -> 200 (filter failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$FILTERED" > "$LOG" 2>&1; then
+                fail_patch "199 -> 200 (official patch failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$OVERRIDE" >> "$LOG" 2>&1; then
+                fail_patch "199 -> 200 (override failed)"
+              fi
+
+            # 4.14.200 -> 4.14.201
+            elif [ "$version" = "200" ] && [ "$next_version" = "201" ]; then
+              OVERRIDE="patch-overrides/4.14.200-201.local.patch"
+              FILTERED="$PATCH_DIR/patch-200-201.filtered.patch"
+
+              [ -s "$OVERRIDE" ] ||
+                fail_patch "Override patch kosong/tidak ditemukan: $OVERRIDE"
+
+              if ! awk '
+                BEGIN {
+                  excluded["fs/eventpoll.c"] = 1
+                  excluded["mm/page_alloc.c"] = 1
+                  excluded["net/packet/af_packet.c"] = 1
+                }
+
+                /^diff --git / {
+                  path = $3
+                  sub(/^a\//, "", path)
+                  skip = (path in excluded)
+                }
+
+                !skip { print }
+              ' "$patch_text" > "$FILTERED"; then
+                echo "Failed to filter 200-201 patch." > "$LOG"
+                fail_patch "200 -> 201 (filter failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$FILTERED" > "$LOG" 2>&1; then
+                fail_patch "200 -> 201 (official patch failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$OVERRIDE" >> "$LOG" 2>&1; then
+                fail_patch "200 -> 201 (override failed)"
+              fi
+
+            # 4.14.202 -> 4.14.203
+            elif [ "$version" = "202" ] && [ "$next_version" = "203" ]; then
+              OVERRIDE="patch-overrides/4.14.202-203.local.patch"
+              FILTERED="$PATCH_DIR/patch-202-203.filtered.patch"
+
+              [ -s "$OVERRIDE" ] ||
+                fail_patch "Override patch kosong/tidak ditemukan: $OVERRIDE"
+
+              if ! awk '
+                BEGIN {
+                  excluded["Documentation/networking/ip-sysctl.txt"] = 1
+                  excluded["drivers/android/binder.c"] = 1
+                  excluded["drivers/usb/gadget/function/f_ncm.c"] = 1
+                  excluded["fs/f2fs/sysfs.c"] = 1
+                  excluded["net/ipv4/icmp.c"] = 1
+                }
+
+                /^diff --git / {
+                  path = $3
+                  sub(/^a\//, "", path)
+                  skip = (path in excluded)
+                }
+
+                !skip { print }
+              ' "$patch_text" > "$FILTERED"; then
+                echo "Failed to filter 202-203 patch." > "$LOG"
+                fail_patch "202 -> 203 (filter failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$FILTERED" > "$LOG" 2>&1; then
+                fail_patch "202 -> 203 (official patch failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$OVERRIDE" >> "$LOG" 2>&1; then
+                fail_patch "202 -> 203 (override failed)"
+              fi
+
+            # 4.14.203 -> 4.14.204
+            elif [ "$version" = "203" ] && [ "$next_version" = "204" ]; then
+              FILTERED="$PATCH_DIR/patch-203-204.filtered.patch"
+
+              # These four changes are already present in this kernel tree:
+              # fscrypt link/rename checks use fscrypt_prepare_* and return
+              # -EXDEV; the policy documentation and futex error path are
+              # also already updated.
+              if ! awk '
+                BEGIN {
+                  excluded["fs/crypto/policy.c"] = 1
+                  excluded["fs/ext4/namei.c"] = 1
+                  excluded["fs/f2fs/namei.c"] = 1
+                  excluded["kernel/futex.c"] = 1
+                }
+
+                /^diff --git / {
+                  path = $3
+                  sub(/^a\//, "", path)
+                  skip = (path in excluded)
+                }
+
+                !skip { print }
+              ' "$patch_text" > "$FILTERED"; then
+                echo "Failed to filter 203-204 patch." > "$LOG"
+                fail_patch "203 -> 204 (filter failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$FILTERED" > "$LOG" 2>&1; then
+                fail_patch "203 -> 204 (official patch failed)"
+              fi
+
+            # 4.14.204 -> 4.14.205
+            elif [ "$version" = "204" ] && [ "$next_version" = "205" ]; then
+              FILTERED="$PATCH_DIR/patch-204-205.filtered.patch"
+
+              # This exact upstream change is already present.
+              if ! awk '
+                BEGIN {
+                  excluded["kernel/futex.c"] = 1
+                }
+
+                /^diff --git / {
+                  path = $3
+                  sub(/^a\//, "", path)
+                  skip = (path in excluded)
+                }
+
+                !skip { print }
+              ' "$patch_text" > "$FILTERED"; then
+                echo "Failed to filter 204-205 patch." > "$LOG"
+                fail_patch "204 -> 205 (filter failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$FILTERED" > "$LOG" 2>&1; then
+                fail_patch "204 -> 205 (official patch failed)"
+              fi
+
+            elif [ "$version" = "206" ] && [ "$next_version" = "207" ]; then
+              FILTERED="$PATCH_DIR/patch-206-207.filtered.patch"
+
+              # Verify the equivalent fixes already present before filtering them.
+              if ! python3 - <<'PY' > "$LOG" 2>&1
+          from pathlib import Path
+          import re
+
+          def read(path):
+              p = Path(path)
+              if not p.is_file():
+                  raise SystemExit(f"missing source file: {path}")
+              return p.read_text(errors="replace")
+
+          pt = read("arch/x86/events/intel/pt.c")
+          assert "!filter->path.dentry" in pt
+          assert "filter->path.dentry && !fr[range].start" in pt
+
+          perf_h = read("include/linux/perf_event.h")
+          match = re.search(r"struct perf_addr_filter\s*\{([^}]*)\}", perf_h, re.S)
+          assert match and re.search(r"\bstruct path\s+path\s*;", match.group(1))
+
+          perf_core = read("kernel/events/core.c")
+          assert "path_put(&filter->path);" in perf_core
+          assert "d_inode(filter->path.dentry)" in perf_core
+
+          futex = read("kernel/futex.c")
+          match = re.search(r"static void put_pi_state\s*\([^)]*\)\s*\{", futex)
+          assert match, "put_pi_state() not found"
+          start = match.end()
+          depth = 1
+          i = start
+          while i < len(futex) and depth:
+              if futex[i] == "{":
+                  depth += 1
+              elif futex[i] == "}":
+                  depth -= 1
+              i += 1
+          body = futex[start:i-1]
+          required = [
+              "raw_spin_lock_irqsave(&pi_state->pi_mutex.wait_lock, flags);",
+              "pi_state_update_owner(pi_state, NULL);",
+              "rt_mutex_proxy_unlock(&pi_state->pi_mutex);",
+              "raw_spin_unlock_irqrestore(&pi_state->pi_mutex.wait_lock, flags);",
+          ]
+          for token in required:
+              assert token in body, f"futex equivalent missing: {token}"
+          print("VERIFIED_ALREADY_PRESENT: perf PT path.dentry conversion")
+          print("VERIFIED_ALREADY_PRESENT: perf_addr_filter uses struct path")
+          print("VERIFIED_ALREADY_PRESENT: perf core path references and path_put")
+          print("VERIFIED_EQUIVALENT: futex put_pi_state uses irqsave/irqrestore")
+          PY
+              then
+                fail_patch "206 -> 207 (pre-applied source verification failed)"
+              fi
+
+              if ! awk '
+                BEGIN {
+                  excluded["arch/x86/events/intel/pt.c"] = 1
+                  excluded["include/linux/perf_event.h"] = 1
+                  excluded["kernel/events/core.c"] = 1
+                  excluded["kernel/futex.c"] = 1
+                  excluded["net/ipv4/syncookies.c"] = 1
+                  excluded["net/ipv6/syncookies.c"] = 1
+                }
+                /^diff / { next }
+                /^--- / {
+                  path = $2
+                  sub(/^a\//, "", path)
+                  sub(/^linux-[^/]+\//, "", path)
+                  skip = (path in excluded)
+                  if (!skip) print
+                  next
+                }
+                /^\+\+\+ / { if (!skip) print; next }
+                !skip { print }
+              ' "$patch_text" > "$FILTERED"; then
+                echo "Failed to filter 206-207 patch." > "$LOG"
+                fail_patch "206 -> 207 (filter failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 < "$FILTERED" > "$LOG" 2>&1; then
+                fail_patch "206 -> 207 (official patch unresolved)"
+              fi
+
+              # Port the upstream receive-buffer clamp while preserving this tree's
+              # tcp_select_initial_window(sock_net(sk), ...) API.
+              if ! python3 - <<'PY' > "$LOG" 2>&1
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "net/ipv4/syncookies.c",
+              "\tint mss;\n\tstruct rtable *rt;",
+              "\tint full_space, mss;\n\tstruct rtable *rt;",
+          )
+          replace_once(
+              "net/ipv4/syncookies.c",
+              "\t/* Try to redo what tcp_v4_send_synack did. */\n"
+              "\treq->rsk_window_clamp = tp->window_clamp ? :dst_metric(&rt->dst, RTAX_WINDOW);\n\n"
+              "\ttcp_select_initial_window(sock_net(sk), tcp_full_space(sk), req->mss,",
+              "\t/* Try to redo what tcp_v4_send_synack did. */\n"
+              "\treq->rsk_window_clamp = tp->window_clamp ? :dst_metric(&rt->dst, RTAX_WINDOW);\n"
+              "\t/* limit the window selection if the user enforce a smaller rx buffer */\n"
+              "\tfull_space = tcp_full_space(sk);\n"
+              "\tif (sk->sk_userlocks & SOCK_RCVBUF_LOCK &&\n"
+              "\t    (req->rsk_window_clamp > full_space || req->rsk_window_clamp == 0))\n"
+              "\t\treq->rsk_window_clamp = full_space;\n\n"
+              "\ttcp_select_initial_window(sock_net(sk), full_space, req->mss,",
+          )
+          replace_once(
+              "net/ipv6/syncookies.c",
+              "\tint mss;\n\tstruct dst_entry *dst;",
+              "\tint full_space, mss;\n\tstruct dst_entry *dst;",
+          )
+          replace_once(
+              "net/ipv6/syncookies.c",
+              "\treq->rsk_window_clamp = tp->window_clamp ? :dst_metric(dst, RTAX_WINDOW);\n"
+              "\ttcp_select_initial_window(sock_net(sk), tcp_full_space(sk), req->mss,",
+              "\treq->rsk_window_clamp = tp->window_clamp ? :dst_metric(dst, RTAX_WINDOW);\n"
+              "\t/* limit the window selection if the user enforce a smaller rx buffer */\n"
+              "\tfull_space = tcp_full_space(sk);\n"
+              "\tif (sk->sk_userlocks & SOCK_RCVBUF_LOCK &&\n"
+              "\t    (req->rsk_window_clamp > full_space || req->rsk_window_clamp == 0))\n"
+              "\t\treq->rsk_window_clamp = full_space;\n\n"
+              "\ttcp_select_initial_window(sock_net(sk), full_space, req->mss,",
+          )
+          print("LOCAL_PORT_APPLIED: IPv4 syncookie receive-buffer clamp")
+          print("LOCAL_PORT_APPLIED: IPv6 syncookie receive-buffer clamp")
+          PY
+              then
+                fail_patch "206 -> 207 (syncookies local port failed)"
+              fi
+              cat "$LOG" | tee -a "$REPORT"
+
+              grep -q 'full_space = tcp_full_space(sk);' net/ipv4/syncookies.c ||
+                fail_patch "206 -> 207 (IPv4 syncookie validation)"
+              grep -q 'full_space = tcp_full_space(sk);' net/ipv6/syncookies.c ||
+                fail_patch "206 -> 207 (IPv6 syncookie validation)"
+              grep -q 'tcp_select_initial_window(sock_net(sk), full_space, req->mss' net/ipv4/syncookies.c ||
+                fail_patch "206 -> 207 (IPv4 API validation)"
+              grep -q 'tcp_select_initial_window(sock_net(sk), full_space, req->mss' net/ipv6/syncookies.c ||
+                fail_patch "206 -> 207 (IPv6 API validation)"
+
+              {
+                echo "ALREADY_PRESENT: arch/x86/events/intel/pt.c"
+                echo "ALREADY_PRESENT: include/linux/perf_event.h"
+                echo "ALREADY_PRESENT: kernel/events/core.c"
+                echo "ALREADY_PRESENT_EQUIVALENT: kernel/futex.c"
+                echo "LOCALLY_PORTED: net/ipv4/syncookies.c"
+                echo "LOCALLY_PORTED: net/ipv6/syncookies.c"
+              } | tee -a "$REPORT"
+
+            elif [ "$version" = "209" ] && [ "$next_version" = "210" ]; then
+              FILTERED="$PATCH_DIR/patch-209-210.filtered.patch"
+
+              # Port three upstream hunks whose surrounding downstream code differs.
+              if ! awk '
+                BEGIN {
+                  excluded["arch/arm64/include/asm/pgtable.h"] = 1
+                  excluded["drivers/scsi/ufs/ufshcd.c"] = 1
+                  excluded["drivers/usb/gadget/function/f_midi.c"] = 1
+                }
+                /^diff --git / {
+                  path = $3
+                  sub(/^a\//, "", path)
+                  skip = (path in excluded)
+                }
+                !skip { print }
+              ' "$patch_text" > "$FILTERED"; then
+                echo "Failed to filter 209-210 patch." > "$LOG"
+                fail_patch "209 -> 210 (filter failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$FILTERED" > "$LOG" 2>&1; then
+                fail_patch "209 -> 210 (official patch unresolved)"
+              fi
+
+              if ! python3 - <<'PY' > "$LOG" 2>&1
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              source = p.read_text()
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one exact source match, found {count}")
+              p.write_text(source.replace(old, new, 1))
+
+          # Preserve hardware dirty state in pte_wrprotect(), not only in
+          # ptep_set_wrprotect(), as required by upstream commit ff1712f.
+          replace_once(
+              "arch/arm64/include/asm/pgtable.h",
+              "static inline pte_t pte_wrprotect(pte_t pte)\n"
+              "{\n"
+              "\tpte = clear_pte_bit(pte, __pgprot(PTE_WRITE));\n"
+              "\tpte = set_pte_bit(pte, __pgprot(PTE_RDONLY));\n"
+              "\treturn pte;\n"
+              "}\n",
+              "static inline pte_t pte_wrprotect(pte_t pte)\n"
+              "{\n"
+              "\t/*\n"
+              "\t * If hardware-dirty (PTE_WRITE/DBM bit set and PTE_RDONLY\n"
+              "\t * clear), set the PTE_DIRTY bit.\n"
+              "\t */\n"
+              "\tif (pte_hw_dirty(pte))\n"
+              "\t\tpte = pte_mkdirty(pte);\n"
+              "\n"
+              "\tpte = clear_pte_bit(pte, __pgprot(PTE_WRITE));\n"
+              "\tpte = set_pte_bit(pte, __pgprot(PTE_RDONLY));\n"
+              "\treturn pte;\n"
+              "}\n",
+          )
+          replace_once(
+              "arch/arm64/include/asm/pgtable.h",
+              "\t\t/*\n"
+              "\t\t * If hardware-dirty (PTE_WRITE/DBM bit set and PTE_RDONLY\n"
+              "\t\t * clear), set the PTE_DIRTY bit.\n"
+              "\t\t */\n"
+              "\t\tif (pte_hw_dirty(pte))\n"
+              "\t\t\tpte = pte_mkdirty(pte);\n",
+              "",
+          )
+
+          # Let the PM runtime core serialize shutdown with runtime resume,
+          # preserving this tree's local RPMB removal step.
+          replace_once(
+              "drivers/scsi/ufs/ufshcd.c",
+              "\tif (pm_runtime_suspended(hba->dev)) {\n"
+              "\t\tret = ufshcd_runtime_resume(hba);\n"
+              "\t\tif (ret)\n"
+              "\t\t\tgoto out;\n"
+              "\t}\n\n"
+              "\tufshcd_rpmb_remove(hba);",
+              "\tpm_runtime_get_sync(hba->dev);\n\n"
+              "\tufshcd_rpmb_remove(hba);",
+          )
+
+          # Free midi->id on allocation failures after it has been allocated.
+          replace_once(
+              "drivers/usb/gadget/function/f_midi.c",
+              "\tif (opts->id && !midi->id) {\n"
+              "\t\tstatus = -ENOMEM;\n"
+              "\t\tgoto setup_fail;\n"
+              "\t}",
+              "\tif (opts->id && !midi->id) {\n"
+              "\t\tstatus = -ENOMEM;\n"
+              "\t\tgoto midi_free;\n"
+              "\t}",
+          )
+          replace_once(
+              "drivers/usb/gadget/function/f_midi.c",
+              "\tstatus = kfifo_alloc(&midi->in_req_fifo, midi->qlen, GFP_KERNEL);\n"
+              "\tif (status)\n"
+              "\t\tgoto setup_fail;",
+              "\tstatus = kfifo_alloc(&midi->in_req_fifo, midi->qlen, GFP_KERNEL);\n"
+              "\tif (status)\n"
+              "\t\tgoto midi_free;",
+          )
+          replace_once(
+              "drivers/usb/gadget/function/f_midi.c",
+              "setup_fail:\n"
+              "\tmutex_unlock(&opts->lock);\n"
+              "\tkfree(midi);\n"
+              "\treturn ERR_PTR(status);",
+              "midi_free:\n"
+              "\tif (midi)\n"
+              "\t\tkfree(midi->id);\n"
+              "\tkfree(midi);\n"
+              "setup_fail:\n"
+              "\tmutex_unlock(&opts->lock);\n"
+              "\treturn ERR_PTR(status);",
+          )
+
+          # Assert each adapted upstream change before the stage can continue.
+          pg = Path("arch/arm64/include/asm/pgtable.h").read_text()
+          wr = re.search(r"static inline pte_t pte_wrprotect\(pte_t pte\)\s*\{(.*?)\n\}", pg, re.S)
+          assert wr and "if (pte_hw_dirty(pte))" in wr.group(1)
+          ps = re.search(r"static inline void ptep_set_wrprotect\([^)]*\)\s*\{(.*?)\n\}", pg, re.S)
+          assert ps and "pte_hw_dirty" not in ps.group(1)
+
+          ufs = Path("drivers/scsi/ufs/ufshcd.c").read_text()
+          shutdown = re.search(r"int ufshcd_shutdown\(struct ufs_hba \*hba\)(.*?)EXPORT_SYMBOL\(ufshcd_shutdown\);", ufs, re.S)
+          assert shutdown and "pm_runtime_get_sync(hba->dev);" in shutdown.group(1)
+          assert "pm_runtime_suspended(hba->dev)" not in shutdown.group(1)
+
+          midi = Path("drivers/usb/gadget/function/f_midi.c").read_text()
+          alloc = re.search(r"static struct usb_function \*f_midi_alloc\(.*?\n\}", midi, re.S)
+          assert alloc and alloc.group(0).count("midi_free:") == 1
+          assert "goto midi_free;" in alloc.group(0)
+          assert "kfree(midi->id);" in alloc.group(0)
+          print("LOCALLY_PORTED: arm64 pte_wrprotect hardware-dirty preservation")
+          print("LOCALLY_PORTED: UFS shutdown/runtime-resume serialization")
+          print("LOCALLY_PORTED: f_midi_alloc error-path midi->id cleanup")
+          print("VERIFIED: all three downstream ports match expected source invariants")
+          PY
+              then
+                fail_patch "209 -> 210 (downstream port verification failed)"
+              fi
+              cat "$LOG" | tee -a "$REPORT"
+
+              {
+                echo "LOCALLY_PORTED: arch/arm64/include/asm/pgtable.h"
+                echo "LOCALLY_PORTED: drivers/scsi/ufs/ufshcd.c"
+                echo "LOCALLY_PORTED: drivers/usb/gadget/function/f_midi.c"
+              } | tee -a "$REPORT"
+
+            else
+              # Normal strict patching for all other increments
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$patch_text" > "$LOG" 2>&1; then
+                fail_patch "$version -> $next_version (apply failed)"
+              fi
+            fi
+
+            current_sublevel=$(awk '$1 == "SUBLEVEL" && $2 == "=" {print $3; exit}' Makefile)
+
+            [ "$current_sublevel" = "$next_version" ] || {
+              echo "Expected SUBLEVEL=$next_version, found $current_sublevel" > "$LOG"
+              fail_patch "$version -> $next_version (version validation)"
+            }
+
+            echo "PASS: 4.14.$version -> 4.14.$next_version" |
+              tee -a "$REPORT"
+          done
+
+          FINAL_SUBLEVEL=$(awk '$1 == "SUBLEVEL" && $2 == "=" {print $3; exit}' Makefile)
+
+          [ "$FINAL_SUBLEVEL" = "$TO_VERSION" ] ||
+            fail_patch "final version validation"
+
+          save_partial_diff
+
+          echo "PATCH STAGE COMPLETE: 4.14.$FROM_VERSION -> 4.14.$TO_VERSION" |
+            tee -a "$REPORT"
+
+      - name: Commit and push this stage
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          TO_VERSION: ${{ steps.range.outputs.to }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          TEST_BRANCH="upstream-4.14.210-test"
+          if git ls-remote --exit-code --heads origin "$TEST_BRANCH" >/dev/null 2>&1; then
+            echo "ERROR: branch $TEST_BRANCH sudah ada; menolak overwrite."
+            exit 1
+          fi
+
+          git switch -c "$TEST_BRANCH"
+          git add -A
+
+          git diff --cached --quiet && {
+            echo "No staged changes; refusing empty upgrade commit."
+            exit 1
+          }
+
+          git commit -m "Linux 4.14.$TO_VERSION: apply upstream stable patches"
+
+          git push origin HEAD:refs/heads/upstream-4.14.210-test
+
+          {
+            echo ""
+            echo "PUSHED: $(git rev-parse HEAD)"
+            echo "Target branch: upstream-4.14.210-test"
+          } | tee -a "$RUNNER_TEMP/patch-report.txt"
+
+      - name: Audit-only result
+        if: ${{ inputs.mode == 'audit' && success() }}
+        run: |
+          {
+            echo ""
+            echo "AUDIT ONLY: no repository branch was changed."
+            echo "Review upstream-stage.patch and review-files.txt before apply."
+          } | tee -a "$RUNNER_TEMP/patch-report.txt"
+
+      - name: Upload patch report and review diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-4.14-stage-${{ inputs.stage }}-${{ inputs.mode }}-report
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/patch-report.txt
+            ${{ runner.temp }}/failed-patch.log
+            ${{ runner.temp }}/changed-files.txt
+            ${{ runner.temp }}/review-files.txt
+            ${{ runner.temp }}/diff-stat.txt
+            ${{ runner.temp }}/whitespace-check.txt
+            ${{ runner.temp }}/upstream-stage.patch
+            ${{ runner.temp }}/reject-files.tar.gz
+
+      - name: Write run summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/patch-report.txt" ]; then
+            cat "$RUNNER_TEMP/patch-report.txt" >> "$GITHUB_STEP_SUMMARY"
+          fi
