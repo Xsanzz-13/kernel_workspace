@@ -1,0 +1,35 @@
+diff --git a/fs/eventpoll.c b/fs/eventpoll.c
+--- a/fs/eventpoll.c
++++ b/fs/eventpoll.c
+@@ -1392,7 +1392,7 @@
+ 
+ static int ep_create_wakeup_source(struct epitem *epi)
+ {
+-	const char *name;
++	struct name_snapshot n;
+ 	struct wakeup_source *ws;
+ 
+ 	if (!epi->ep->ws) {
+@@ -1401,8 +1401,9 @@
+ 			return -ENOMEM;
+ 	}
+ 
+-	name = epi->ffd.file->f_path.dentry->d_name.name;
+-	ws = wakeup_source_register(NULL, name);
++	take_dentry_name_snapshot(&n, epi->ffd.file->f_path.dentry);
++	ws = wakeup_source_register(NULL, n.name.name);
++	release_dentry_name_snapshot(&n);
+ 
+ 	if (!ws)
+ 		return -ENOMEM;
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c
+--- a/mm/page_alloc.c
++++ b/mm/page_alloc.c
+@@ -66,6 +66,7 @@
+ #include <linux/kthread.h>
+ #include <linux/memcontrol.h>
+ #include <linux/ftrace.h>
++#include <linux/khugepaged.h>
+ #include <linux/lockdep.h>
+ #include <linux/nmi.h>
+ #include <linux/psi.h>
