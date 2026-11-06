@@ -167,6 +167,50 @@ jobs:
             exit 1
           }
 
+          # Smart wrapper: rejected hunks are skipped only when their reverse
+          # dry-run proves the upstream result is already present in the tree.
+          patch() {
+            local input="$PATCH_DIR/smart-patch-input.diff"
+            local check_log="$PATCH_DIR/smart-reverse-check.log"
+            local rc=0
+            local unresolved=0
+            local rejects=()
+            local rej
+
+            cat > "$input"
+            if command patch "$@" < "$input"; then
+              return 0
+            else
+              rc=$?
+            fi
+
+            case " $* " in
+              *" --forward "*) ;;
+              *) return "$rc" ;;
+            esac
+
+            mapfile -d '' rejects < <(find . -type f -name '*.rej' -print0)
+            [ "${#rejects[@]}" -gt 0 ] || return "$rc"
+
+            for rej in "${rejects[@]}"; do
+              if command patch --batch --reverse --dry-run --fuzz=0 -p0 < "$rej" > "$check_log" 2>&1; then
+                echo "ALREADY_PRESENT: ${rej#./} (reverse hunk check passed)" | tee -a "$REPORT" >&2
+                rm -f "$rej"
+              else
+                echo "UNRESOLVED_HUNK: ${rej#./}" | tee -a "$REPORT" >&2
+                cat "$check_log" >&2
+                unresolved=1
+              fi
+            done
+
+            if [ "$unresolved" -eq 0 ]; then
+              find . -type f -name '*.orig' -delete
+              echo "SMART_PATCH_RECOVERED: rejected hunks verified already present" | tee -a "$REPORT" >&2
+              return 0
+            fi
+            return 1
+          }
+
           echo "Patch source: https://cdn.kernel.org/pub/linux/kernel/v4.x/incr/" |
             tee -a "$REPORT"
 
@@ -371,6 +415,166 @@ jobs:
                 < "$FILTERED" > "$LOG" 2>&1; then
                 fail_patch "204 -> 205 (official patch failed)"
               fi
+
+            elif [ "$version" = "206" ] && [ "$next_version" = "207" ]; then
+              FILTERED="$PATCH_DIR/patch-206-207.filtered.patch"
+
+              # Verify the equivalent fixes already present before filtering them.
+              if ! python3 - <<'PY' > "$LOG" 2>&1
+          from pathlib import Path
+          import re
+
+          def read(path):
+              p = Path(path)
+              if not p.is_file():
+                  raise SystemExit(f"missing source file: {path}")
+              return p.read_text(errors="replace")
+
+          pt = read("arch/x86/events/intel/pt.c")
+          assert "!filter->path.dentry" in pt
+          assert "filter->path.dentry && !fr[range].start" in pt
+
+          perf_h = read("include/linux/perf_event.h")
+          match = re.search(r"struct perf_addr_filter\s*\{([^}]*)\}", perf_h, re.S)
+          assert match and re.search(r"\bstruct path\s+path\s*;", match.group(1))
+
+          perf_core = read("kernel/events/core.c")
+          assert "path_put(&filter->path);" in perf_core
+          assert "d_inode(filter->path.dentry)" in perf_core
+
+          futex = read("kernel/futex.c")
+          match = re.search(r"static void put_pi_state\s*\([^)]*\)\s*\{", futex)
+          assert match, "put_pi_state() not found"
+          start = match.end()
+          depth = 1
+          i = start
+          while i < len(futex) and depth:
+              if futex[i] == "{":
+                  depth += 1
+              elif futex[i] == "}":
+                  depth -= 1
+              i += 1
+          body = futex[start:i-1]
+          required = [
+              "raw_spin_lock_irqsave(&pi_state->pi_mutex.wait_lock, flags);",
+              "pi_state_update_owner(pi_state, NULL);",
+              "rt_mutex_proxy_unlock(&pi_state->pi_mutex);",
+              "raw_spin_unlock_irqrestore(&pi_state->pi_mutex.wait_lock, flags);",
+          ]
+          for token in required:
+              assert token in body, f"futex equivalent missing: {token}"
+          print("VERIFIED_ALREADY_PRESENT: perf PT path.dentry conversion")
+          print("VERIFIED_ALREADY_PRESENT: perf_addr_filter uses struct path")
+          print("VERIFIED_ALREADY_PRESENT: perf core path references and path_put")
+          print("VERIFIED_EQUIVALENT: futex put_pi_state uses irqsave/irqrestore")
+          PY
+              then
+                fail_patch "206 -> 207 (pre-applied source verification failed)"
+              fi
+
+              if ! awk '
+                BEGIN {
+                  excluded["arch/x86/events/intel/pt.c"] = 1
+                  excluded["include/linux/perf_event.h"] = 1
+                  excluded["kernel/events/core.c"] = 1
+                  excluded["kernel/futex.c"] = 1
+                  excluded["net/ipv4/syncookies.c"] = 1
+                  excluded["net/ipv6/syncookies.c"] = 1
+                }
+                /^diff / { next }
+                /^--- / {
+                  path = $2
+                  sub(/^a\//, "", path)
+                  sub(/^linux-[^/]+\//, "", path)
+                  skip = (path in excluded)
+                  if (!skip) print
+                  next
+                }
+                /^\+\+\+ / { if (!skip) print; next }
+                !skip { print }
+              ' "$patch_text" > "$FILTERED"; then
+                echo "Failed to filter 206-207 patch." > "$LOG"
+                fail_patch "206 -> 207 (filter failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 < "$FILTERED" > "$LOG" 2>&1; then
+                fail_patch "206 -> 207 (official patch unresolved)"
+              fi
+
+              # Port the upstream receive-buffer clamp while preserving this tree's
+              # tcp_select_initial_window(sock_net(sk), ...) API.
+              if ! python3 - <<'PY' > "$LOG" 2>&1
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "net/ipv4/syncookies.c",
+              "\tint mss;\n\tstruct rtable *rt;",
+              "\tint full_space, mss;\n\tstruct rtable *rt;",
+          )
+          replace_once(
+              "net/ipv4/syncookies.c",
+              "\t/* Try to redo what tcp_v4_send_synack did. */\n"
+              "\treq->rsk_window_clamp = tp->window_clamp ? :dst_metric(&rt->dst, RTAX_WINDOW);\n\n"
+              "\ttcp_select_initial_window(sock_net(sk), tcp_full_space(sk), req->mss,",
+              "\t/* Try to redo what tcp_v4_send_synack did. */\n"
+              "\treq->rsk_window_clamp = tp->window_clamp ? :dst_metric(&rt->dst, RTAX_WINDOW);\n"
+              "\t/* limit the window selection if the user enforce a smaller rx buffer */\n"
+              "\tfull_space = tcp_full_space(sk);\n"
+              "\tif (sk->sk_userlocks & SOCK_RCVBUF_LOCK &&\n"
+              "\t    (req->rsk_window_clamp > full_space || req->rsk_window_clamp == 0))\n"
+              "\t\treq->rsk_window_clamp = full_space;\n\n"
+              "\ttcp_select_initial_window(sock_net(sk), full_space, req->mss,",
+          )
+          replace_once(
+              "net/ipv6/syncookies.c",
+              "\tint mss;\n\tstruct dst_entry *dst;",
+              "\tint full_space, mss;\n\tstruct dst_entry *dst;",
+          )
+          replace_once(
+              "net/ipv6/syncookies.c",
+              "\treq->rsk_window_clamp = tp->window_clamp ? :dst_metric(dst, RTAX_WINDOW);\n"
+              "\ttcp_select_initial_window(sock_net(sk), tcp_full_space(sk), req->mss,",
+              "\treq->rsk_window_clamp = tp->window_clamp ? :dst_metric(dst, RTAX_WINDOW);\n"
+              "\t/* limit the window selection if the user enforce a smaller rx buffer */\n"
+              "\tfull_space = tcp_full_space(sk);\n"
+              "\tif (sk->sk_userlocks & SOCK_RCVBUF_LOCK &&\n"
+              "\t    (req->rsk_window_clamp > full_space || req->rsk_window_clamp == 0))\n"
+              "\t\treq->rsk_window_clamp = full_space;\n\n"
+              "\ttcp_select_initial_window(sock_net(sk), full_space, req->mss,",
+          )
+          print("LOCAL_PORT_APPLIED: IPv4 syncookie receive-buffer clamp")
+          print("LOCAL_PORT_APPLIED: IPv6 syncookie receive-buffer clamp")
+          PY
+              then
+                fail_patch "206 -> 207 (syncookies local port failed)"
+              fi
+              cat "$LOG" | tee -a "$REPORT"
+
+              grep -q 'full_space = tcp_full_space(sk);' net/ipv4/syncookies.c ||
+                fail_patch "206 -> 207 (IPv4 syncookie validation)"
+              grep -q 'full_space = tcp_full_space(sk);' net/ipv6/syncookies.c ||
+                fail_patch "206 -> 207 (IPv6 syncookie validation)"
+              grep -q 'tcp_select_initial_window(sock_net(sk), full_space, req->mss' net/ipv4/syncookies.c ||
+                fail_patch "206 -> 207 (IPv4 API validation)"
+              grep -q 'tcp_select_initial_window(sock_net(sk), full_space, req->mss' net/ipv6/syncookies.c ||
+                fail_patch "206 -> 207 (IPv6 API validation)"
+
+              {
+                echo "ALREADY_PRESENT: arch/x86/events/intel/pt.c"
+                echo "ALREADY_PRESENT: include/linux/perf_event.h"
+                echo "ALREADY_PRESENT: kernel/events/core.c"
+                echo "ALREADY_PRESENT_EQUIVALENT: kernel/futex.c"
+                echo "LOCALLY_PORTED: net/ipv4/syncookies.c"
+                echo "LOCALLY_PORTED: net/ipv6/syncookies.c"
+              } | tee -a "$REPORT"
 
             else
               # Normal strict patching for all other increments
