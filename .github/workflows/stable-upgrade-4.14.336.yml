@@ -1,13 +1,8 @@
 
+
 name: Linux 4.14.199 to 4.14.336
 
 on:
-  push:
-    branches:
-      - upstream-4.14.336
-    paths:
-      - .github/workflows/stable-upgrade-4.14.336.yml
-
   workflow_dispatch:
     inputs:
       stage:
@@ -22,6 +17,7 @@ on:
         type: choice
         options: [audit, apply]
         default: audit
+
 
 permissions:
   contents: write
