@@ -345,6 +345,33 @@ jobs:
                 fail_patch "203 -> 204 (official patch failed)"
               fi
 
+            # 4.14.204 -> 4.14.205
+            elif [ "$version" = "204" ] && [ "$next_version" = "205" ]; then
+              FILTERED="$PATCH_DIR/patch-204-205.filtered.patch"
+
+              # This exact upstream change is already present.
+              if ! awk '
+                BEGIN {
+                  excluded["kernel/futex.c"] = 1
+                }
+
+                /^diff --git / {
+                  path = $3
+                  sub(/^a\//, "", path)
+                  skip = (path in excluded)
+                }
+
+                !skip { print }
+              ' "$patch_text" > "$FILTERED"; then
+                echo "Failed to filter 204-205 patch." > "$LOG"
+                fail_patch "204 -> 205 (filter failed)"
+              fi
+
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$FILTERED" > "$LOG" 2>&1; then
+                fail_patch "204 -> 205 (official patch failed)"
+              fi
+
             else
               # Normal strict patching for all other increments
               if ! patch --batch --forward --fuzz=0 -p1 \
