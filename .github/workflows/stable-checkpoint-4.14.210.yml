@@ -764,6 +764,7 @@ jobs:
       - name: Commit and push this stage
         if: ${{ inputs.mode == 'apply' }}
         env:
+          FROM_VERSION: ${{ steps.range.outputs.from }}
           TO_VERSION: ${{ steps.range.outputs.to }}
         run: |
           set -euo pipefail
@@ -785,7 +786,55 @@ jobs:
             exit 1
           }
 
-          git commit -m "Linux 4.14.$TO_VERSION: apply upstream stable patches"
+          resolve_upstream_commit() {
+            local tag="$1"
+            local ref_json object_type object_sha tag_json resolved
+
+            ref_json="$(curl --fail --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/gregkh/linux/git/ref/tags/$tag")"
+
+            object_type="$(jq -r '.object.type' <<< "$ref_json")"
+            object_sha="$(jq -r '.object.sha' <<< "$ref_json")"
+
+            if [ "$object_type" = "tag" ]; then
+              tag_json="$(curl --fail --silent --show-error \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/gregkh/linux/git/tags/$object_sha")"
+              resolved="$(jq -r '.object.sha' <<< "$tag_json")"
+            else
+              resolved="$object_sha"
+            fi
+
+            [[ "$resolved" =~ ^[0-9a-f]{40}$ ]] || {
+              echo "ERROR: upstream tag $tag tidak menghasilkan commit SHA valid."
+              exit 1
+            }
+
+            printf '%s' "$resolved"
+          }
+
+          BASE_TAG="v4.14.$FROM_VERSION"
+          TARGET_TAG="v4.14.$TO_VERSION"
+
+          BASE_COMMIT="$(resolve_upstream_commit "$BASE_TAG")"
+          TARGET_COMMIT="$(resolve_upstream_commit "$TARGET_TAG")"
+
+          {
+            echo "Upstream base: $BASE_TAG ($BASE_COMMIT)"
+            echo "Upstream target: $TARGET_TAG ($TARGET_COMMIT)"
+          } | tee -a "$RUNNER_TEMP/patch-report.txt"
+
+          git commit \
+            -m "Linux 4.14.$FROM_VERSION..4.14.$TO_VERSION: apply upstream stable patches" \
+            -m "Upstream repository: https://github.com/gregkh/linux" \
+            -m "Upstream base tag: $BASE_TAG" \
+            -m "Upstream base commit: $BASE_COMMIT" \
+            -m "Upstream target tag: $TARGET_TAG" \
+            -m "Upstream target commit: $TARGET_COMMIT" \
+            -m "Upstream source commit: $TARGET_COMMIT" \
+            -m "Patch source: https://cdn.kernel.org/pub/linux/kernel/v4.x/incr/" \
+            -m "Applied as incremental stable patches with downstream local ports where required."
 
           git push origin HEAD:refs/heads/upstream-4.14.210-test
 
