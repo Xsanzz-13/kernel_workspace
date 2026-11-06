@@ -1,5 +1,4 @@
 
-
 name: Linux 4.14.199 to 4.14.336
 
 on:
@@ -17,7 +16,6 @@ on:
         type: choice
         options: [audit, apply]
         default: audit
-
 
 permissions:
   contents: write
@@ -68,13 +66,13 @@ jobs:
             exit 1
           }
 
-          [ "$GITHUB_REF" = "refs/heads/upstream-4.14.336" ] || \
+          [ "$GITHUB_REF" = "refs/heads/upstream-4.14.336" ] ||
             fail "Workflow hanya boleh berjalan pada branch upstream-4.14.336."
 
           EXPECTED_BASE="3fe25c27900b793ca2ff03a0355b94acc8170722"
 
-          git merge-base --is-ancestor "$EXPECTED_BASE" HEAD || \
-            fail "HEAD bukan turunan dari baseline yang disepakati: $EXPECTED_BASE"
+          git merge-base --is-ancestor "$EXPECTED_BASE" HEAD ||
+            fail "HEAD bukan turunan dari baseline: $EXPECTED_BASE"
 
           VERSION=$(awk '$1 == "VERSION" && $2 == "=" {print $3; exit}' Makefile)
           PATCHLEVEL=$(awk '$1 == "PATCHLEVEL" && $2 == "=" {print $3; exit}' Makefile)
@@ -90,16 +88,16 @@ jobs:
             *) fail "Stage tidak dikenal: $STAGE" ;;
           esac
 
-          [ "$SUBLEVEL" = "$FROM_VERSION" ] || \
-            fail "Stage $STAGE membutuhkan source 4.14.$FROM_VERSION, tetapi Makefile menunjukkan 4.14.$SUBLEVEL."
+          [ "$SUBLEVEL" = "$FROM_VERSION" ] ||
+            fail "Stage $STAGE membutuhkan 4.14.$FROM_VERSION, ditemukan 4.14.$SUBLEVEL."
 
-          [ -d "KernelSU-Next/kernel" ] || \
+          [ -d "KernelSU-Next/kernel" ] ||
             fail "KernelSU-Next/kernel tidak ditemukan."
 
-          [ -L "drivers/kernelsu" ] || \
+          [ -L "drivers/kernelsu" ] ||
             fail "drivers/kernelsu bukan symlink."
 
-          [ "$(readlink drivers/kernelsu)" = "../KernelSU-Next/kernel" ] || \
+          [ "$(readlink drivers/kernelsu)" = "../KernelSU-Next/kernel" ] ||
             fail "Target symlink drivers/kernelsu berubah."
 
           {
@@ -142,8 +140,8 @@ jobs:
             git diff --binary HEAD \
               > "$RUNNER_TEMP/upstream-stage.patch" || true
 
-            find . -type f \( -name '*.rej' -o -name '*.orig' \) -print0 \
-              | tar --null -czf "$RUNNER_TEMP/reject-files.tar.gz" -T - \
+            find . -type f \( -name '*.rej' -o -name '*.orig' \) -print0 |
+              tar --null -czf "$RUNNER_TEMP/reject-files.tar.gz" -T - \
               || true
 
             grep -Ei \
@@ -161,19 +159,18 @@ jobs:
               echo "Patch output:"
               cat "$LOG" 2>/dev/null || true
               echo ""
-              echo "Partial changes are attached for diagnosis only; nothing was pushed."
+              echo "Partial changes attached; nothing was pushed."
             } | tee -a "$REPORT"
 
             cp "$LOG" "$RUNNER_TEMP/failed-patch.log" 2>/dev/null || true
-
             exit 1
           }
 
-          echo "Patch source: https://cdn.kernel.org/pub/linux/kernel/v4.x/incr/" \
-            | tee -a "$REPORT"
+          echo "Patch source: https://cdn.kernel.org/pub/linux/kernel/v4.x/incr/" |
+            tee -a "$REPORT"
 
-          echo "Strict mode: --batch --forward --fuzz=0" \
-            | tee -a "$REPORT"
+          echo "Strict mode: --batch --forward --fuzz=0" |
+            tee -a "$REPORT"
 
           for ((version=FROM_VERSION; version<TO_VERSION; version++)); do
             next_version=$((version + 1))
@@ -193,17 +190,63 @@ jobs:
             fi
 
             if ! xz -t "$patch_file" > "$LOG" 2>&1; then
-              fail_patch "$version -> $next_version (invalid XZ archive)"
+              fail_patch "$version -> $next_version (invalid XZ)"
             fi
 
             if ! xz -dc "$patch_file" > "$patch_text" 2> "$LOG"; then
               fail_patch "$version -> $next_version (decompression)"
             fi
 
-            if ! patch --batch --forward --fuzz=0 -p1 \
-              < "$patch_text" > "$LOG" 2>&1; then
+            # Special handling for 4.14.199 -> 4.14.200
+            if [ "$version" = "199" ] && [ "$next_version" = "200" ]; then
+              OVERRIDE="patch-overrides/4.14.199-200.local.patch"
+              FILTERED="$PATCH_DIR/patch-199-200.filtered.patch"
 
-              fail_patch "$version -> $next_version (apply failed)"
+              [ -f "$OVERRIDE" ] ||
+                fail_patch "Override patch tidak ditemukan: $OVERRIDE"
+
+              # Remove files handled by the local conflict patch.
+              awk '
+                /^diff --git / {
+                  path = $3
+                  sub(/^a\//, "", path)
+
+                  skip = (
+                    path == "drivers/usb/dwc3/gadget.c" ||
+                    path == "include/linux/debugfs.h" ||
+                    path == "lib/string.c" ||
+                    path == "mm/memory.c" ||
+                    path == "mm/mmap.c"
+                  )
+                }
+
+                !skip { print }
+              ' "$patch_text" > "$FILTERED"
+
+              [ -s "$FILTERED" ] ||
+                fail_patch "Filtered official patch kosong."
+
+              # Official patch for all other files.
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$FILTERED" > "$LOG" 2>&1; then
+
+                fail_patch "$version -> $next_version (official patch failed)"
+              fi
+
+              # Local resolution for conflict files.
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$OVERRIDE" >> "$LOG" 2>&1; then
+
+                fail_patch "$version -> $next_version (override failed)"
+              fi
+
+            else
+              # Normal strict patching for remaining versions.
+              if ! patch --batch --forward --fuzz=0 -p1 \
+                < "$patch_text" > "$LOG" 2>&1; then
+
+                fail_patch "$version -> $next_version (apply failed)"
+              fi
             fi
 
             current_sublevel=$(awk '$1 == "SUBLEVEL" && $2 == "=" {print $3; exit}' Makefile)
@@ -213,19 +256,19 @@ jobs:
               fail_patch "$version -> $next_version (version validation)"
             }
 
-            echo "PASS: 4.14.$version -> 4.14.$next_version" \
-              | tee -a "$REPORT"
+            echo "PASS: 4.14.$version -> 4.14.$next_version" |
+              tee -a "$REPORT"
           done
 
           FINAL_SUBLEVEL=$(awk '$1 == "SUBLEVEL" && $2 == "=" {print $3; exit}' Makefile)
 
-          [ "$FINAL_SUBLEVEL" = "$TO_VERSION" ] || \
+          [ "$FINAL_SUBLEVEL" = "$TO_VERSION" ] ||
             fail_patch "final version validation"
 
           save_partial_diff
 
-          echo "PATCH STAGE COMPLETE: 4.14.$FROM_VERSION -> 4.14.$TO_VERSION" \
-            | tee -a "$REPORT"
+          echo "PATCH STAGE COMPLETE: 4.14.$FROM_VERSION -> 4.14.$TO_VERSION" |
+            tee -a "$REPORT"
 
       - name: Commit and push this stage
         if: ${{ inputs.mode == 'apply' }}
@@ -240,7 +283,7 @@ jobs:
           git add -A
 
           git diff --cached --quiet && {
-            echo "No staged changes; refusing to create an empty upgrade commit."
+            echo "No staged changes; refusing empty upgrade commit."
             exit 1
           }
 
@@ -260,7 +303,7 @@ jobs:
           {
             echo ""
             echo "AUDIT ONLY: no repository branch was changed."
-            echo "Review upstream-stage.patch and review-files.txt before rerunning with mode=apply."
+            echo "Review upstream-stage.patch and review-files.txt before apply."
           } | tee -a "$RUNNER_TEMP/patch-report.txt"
 
       - name: Upload patch report and review diff
