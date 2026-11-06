@@ -1,0 +1,252 @@
+name: Linux 4.14.199 to 4.14.336
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Pilih rentang upgrade"
+        required: true
+        type: choice
+        options: ["1", "2", "3"]
+        default: "1"
+      mode:
+        description: "audit = laporan saja; apply = commit jika semua patch bersih"
+        required: true
+        type: choice
+        options: [audit, apply]
+        default: audit
+
+permissions:
+  contents: write
+
+concurrency:
+  group: linux-414-stable-upgrade-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  upgrade:
+    if: github.ref == 'refs/heads/upstream-4.14.336'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: upstream-4.14.336
+          fetch-depth: 100
+          filter: blob:none
+          persist-credentials: true
+
+      - name: Prepare report
+        env:
+          STAGE: ${{ inputs.stage }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          {
+            echo "Linux stable patch upgrade"
+            echo "Repository: $GITHUB_REPOSITORY"
+            echo "Branch: $GITHUB_REF_NAME"
+            echo "Stage: $STAGE"
+            echo "Mode: $MODE"
+            echo "Started: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo ""
+          } > "$RUNNER_TEMP/patch-report.txt"
+
+      - name: Verify branch and source baseline
+        id: range
+        env:
+          STAGE: ${{ inputs.stage }}
+        run: |
+          set -euo pipefail
+          fail() {
+            echo "ERROR: $*" | tee -a "$RUNNER_TEMP/patch-report.txt"
+            exit 1
+          }
+
+          [ "$GITHUB_REF" = "refs/heads/upstream-4.14.336" ] || fail "Workflow hanya boleh berjalan pada branch upstream-4.14.336."
+          EXPECTED_BASE="3fe25c27900b793ca2ff03a0355b94acc8170722"
+          git merge-base --is-ancestor "$EXPECTED_BASE" HEAD || fail "HEAD bukan turunan dari baseline yang disepakati: $EXPECTED_BASE"
+
+          VERSION=$(awk '$1 == "VERSION" && $2 == "=" {print $3; exit}' Makefile)
+          PATCHLEVEL=$(awk '$1 == "PATCHLEVEL" && $2 == "=" {print $3; exit}' Makefile)
+          SUBLEVEL=$(awk '$1 == "SUBLEVEL" && $2 == "=" {print $3; exit}' Makefile)
+          [ "$VERSION" = "4" ] || fail "VERSION bukan 4."
+          [ "$PATCHLEVEL" = "14" ] || fail "PATCHLEVEL bukan 14."
+
+          case "$STAGE" in
+            1) FROM_VERSION=199; TO_VERSION=250 ;;
+            2) FROM_VERSION=250; TO_VERSION=300 ;;
+            3) FROM_VERSION=300; TO_VERSION=336 ;;
+            *) fail "Stage tidak dikenal: $STAGE" ;;
+          esac
+
+          [ "$SUBLEVEL" = "$FROM_VERSION" ] || fail "Stage $STAGE membutuhkan source 4.14.$FROM_VERSION, tetapi Makefile menunjukkan 4.14.$SUBLEVEL."
+          [ -d "KernelSU-Next/kernel" ] || fail "KernelSU-Next/kernel tidak ditemukan."
+          [ -L "drivers/kernelsu" ] || fail "drivers/kernelsu bukan symlink."
+          [ "$(readlink drivers/kernelsu)" = "../KernelSU-Next/kernel" ] || fail "Target symlink drivers/kernelsu berubah."
+
+          {
+            echo "Baseline commit: $EXPECTED_BASE"
+            echo "Starting HEAD: $(git rev-parse HEAD)"
+            echo "Detected source: 4.14.$SUBLEVEL"
+            echo "Target stage: 4.14.$FROM_VERSION -> 4.14.$TO_VERSION"
+            echo "KernelSU-Next directory and symlink: OK"
+            echo ""
+          } | tee -a "$RUNNER_TEMP/patch-report.txt"
+
+          echo "from=$FROM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "to=$TO_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install patch utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xz-utils patch
+
+      - name: Apply official incremental stable patches
+        env:
+          FROM_VERSION: ${{ steps.range.outputs.from }}
+          TO_VERSION: ${{ steps.range.outputs.to }}
+        run: |
+          set -euo pipefail
+          PATCH_DIR="$RUNNER_TEMP/kernel-stable-patches"
+          REPORT="$RUNNER_TEMP/patch-report.txt"
+          LOG="$RUNNER_TEMP/current-patch.log"
+          mkdir -p "$PATCH_DIR"
+
+          save_partial_diff() {
+            git diff --name-only HEAD > "$RUNNER_TEMP/changed-files.txt" || true
+            git diff --stat HEAD > "$RUNNER_TEMP/diff-stat.txt" || true
+            git diff --binary HEAD > "$RUNNER_TEMP/upstream-stage.patch" || true
+            grep -Ei '(^kernel/sched/|^include/linux/sched|^KernelSU-Next/|^drivers/kernelsu|sprd|unisoc|sharkl3|sc9863a|powervr|pvr|walt|schedtune)' "$RUNNER_TEMP/changed-files.txt" > "$RUNNER_TEMP/review-files.txt" || true
+          }
+
+          fail_patch() {
+            save_partial_diff
+            {
+              echo ""
+              echo "FAILED: $1"
+              echo "Patch output:"
+              cat "$LOG" 2>/dev/null || true
+              echo ""
+              echo "Partial changes are attached for diagnosis only; nothing was pushed."
+            } | tee -a "$REPORT"
+            cp "$LOG" "$RUNNER_TEMP/failed-patch.log" 2>/dev/null || true
+            exit 1
+          }
+
+          echo "Patch source: https://cdn.kernel.org/pub/linux/kernel/v4.x/incr/" | tee -a "$REPORT"
+          echo "Strict mode: --batch --forward --fuzz=0" | tee -a "$REPORT"
+
+          for ((version=FROM_VERSION; version<TO_VERSION; version++)); do
+            next_version=$((version + 1))
+            patch_name="patch-4.14.$version-$next_version.xz"
+            patch_file="$PATCH_DIR/$patch_name"
+            patch_text="$PATCH_DIR/$patch_name.patch"
+            patch_url="https://cdn.kernel.org/pub/linux/kernel/v4.x/incr/$patch_name"
+
+            if ! curl --fail --location --retry 5 --retry-all-errors --connect-timeout 30 --max-time 300 "$patch_url" -o "$patch_file"; then
+              echo "Download failed: $patch_url" > "$LOG"
+              fail_patch "$version -> $next_version (download)"
+            fi
+            if ! xz -t "$patch_file" > "$LOG" 2>&1; then
+              fail_patch "$version -> $next_version (invalid XZ archive)"
+            fi
+            if ! xz -dc "$patch_file" > "$patch_text" 2> "$LOG"; then
+              fail_patch "$version -> $next_version (decompression)"
+            fi
+            if ! patch --dry-run --batch --forward --fuzz=0 -p1 < "$patch_text" > "$LOG" 2>&1; then
+              fail_patch "$version -> $next_version (dry-run conflict)"
+            fi
+            if ! patch --batch --forward --fuzz=0 -p1 < "$patch_text" > "$LOG" 2>&1; then
+              fail_patch "$version -> $next_version (apply failed)"
+            fi
+
+            current_sublevel=$(awk '$1 == "SUBLEVEL" && $2 == "=" {print $3; exit}' Makefile)
+            [ "$current_sublevel" = "$next_version" ] || {
+              echo "Expected SUBLEVEL=$next_version, found $current_sublevel" > "$LOG"
+              fail_patch "$version -> $next_version (version validation)"
+            }
+            echo "PASS: 4.14.$version -> 4.14.$next_version" | tee -a "$REPORT"
+          done
+
+          FINAL_SUBLEVEL=$(awk '$1 == "SUBLEVEL" && $2 == "=" {print $3; exit}' Makefile)
+          [ "$FINAL_SUBLEVEL" = "$TO_VERSION" ] || fail_patch "final version validation"
+
+          save_partial_diff
+          {
+            echo ""
+            echo "RESULT: CLEAN"
+            echo "Final source: Linux 4.14.$FINAL_SUBLEVEL"
+            echo "Changed files: $(wc -l < "$RUNNER_TEMP/changed-files.txt")"
+            echo ""
+            echo "Changed-file statistics:"
+            cat "$RUNNER_TEMP/diff-stat.txt"
+            echo ""
+            echo "Files requiring focused review (scheduler/WALT/SchedTune/KernelSU/Unisoc/GPU):"
+            if [ -s "$RUNNER_TEMP/review-files.txt" ]; then
+              cat "$RUNNER_TEMP/review-files.txt"
+            else
+              echo "No matching paths were changed by this stage."
+            fi
+          } | tee -a "$REPORT"
+
+          if git diff --check > "$RUNNER_TEMP/whitespace-check.txt" 2>&1; then
+            echo "Whitespace check: clean" | tee -a "$REPORT"
+          else
+            {
+              echo "Whitespace check: warnings found"
+              cat "$RUNNER_TEMP/whitespace-check.txt"
+            } | tee -a "$REPORT"
+          fi
+
+      - name: Commit and push this stage
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          TO_VERSION: ${{ steps.range.outputs.to }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && {
+            echo "No staged changes; refusing to create an empty upgrade commit."
+            exit 1
+          }
+          git commit -m "Linux 4.14.$TO_VERSION: apply upstream stable patches"
+          git push origin HEAD:refs/heads/upstream-4.14.336
+          {
+            echo ""
+            echo "PUSHED: $(git rev-parse HEAD)"
+            echo "Target branch: upstream-4.14.336"
+          } | tee -a "$RUNNER_TEMP/patch-report.txt"
+
+      - name: Audit-only result
+        if: ${{ inputs.mode == 'audit' && success() }}
+        run: |
+          {
+            echo ""
+            echo "AUDIT ONLY: no repository branch was changed."
+            echo "Review upstream-stage.patch and review-files.txt before rerunning with mode=apply."
+          } | tee -a "$RUNNER_TEMP/patch-report.txt"
+
+      - name: Upload patch report and review diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-4.14-stage-${{ inputs.stage }}-${{ inputs.mode }}-report
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/patch-report.txt
+            ${{ runner.temp }}/failed-patch.log
+            ${{ runner.temp }}/changed-files.txt
+            ${{ runner.temp }}/review-files.txt
+            ${{ runner.temp }}/diff-stat.txt
+            ${{ runner.temp }}/whitespace-check.txt
+            ${{ runner.temp }}/upstream-stage.patch
+
+      - name: Write run summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/patch-report.txt" ]; then
+            cat "$RUNNER_TEMP/patch-report.txt" >> "$GITHUB_STEP_SUMMARY"
+          fi
