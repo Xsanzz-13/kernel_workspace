@@ -2522,7 +2522,6 @@ static inline int cow_user_page(struct page *dst, struct page *src,
 	void __user *uaddr;
 	bool locked = false;
 	struct vm_area_struct *vma = vmf->vma;
-	struct mm_struct *mm = vma->vm_mm;
 	unsigned long addr = vmf->address;
 
 	debug_dma_assert_idle(src);
