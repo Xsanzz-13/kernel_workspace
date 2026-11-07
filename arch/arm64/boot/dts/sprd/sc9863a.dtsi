@@ -3,17 +3,6 @@
  * Spreadtrum Sharkl3 platform DTS file
  *
  * Copyright (C) 2018, Spreadtrum Communications Inc.
- *
- * Modified by @Xsanzz
- * Device: SM-A032F
- * Platform: UNISOC SC9863A (SharkL3)
- * Kernel: Linux 4.14.199
- *
- * Modifications:
- * - CPU Cluster 1 OPP tuning
- * - Replaced 1600MHz OPP with 1700MHz
- * - Adjusted voltage entries for the modified OPP
- * - Updated CPU and cluster energy-cost tables
  */
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
@@ -95,7 +84,7 @@
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 			capacity-dmips-mhz = <1024>;
-            sugov_slack_timer;
+         sugov_slack_timer;
 		};
 
 		CPU3: cpu@300 {
@@ -108,7 +97,7 @@
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 			capacity-dmips-mhz = <1024>;
-            sugov_slack_timer;
+         sugov_slack_timer;
 		};
 
 		CPU4: cpu@400 {
@@ -168,6 +157,7 @@
 				640	102	/* 1000MHz */
 				704	124	/* 1100MHz */
 				768	148	/* 1200MHz */
+				896	203	/* 1400MHz - estimated */
 			>;
 			idle-cost-data = <
 				20		/* ACTIVE-IDLE */
@@ -197,6 +187,7 @@
 				640	3	/* 1000MHz */
 				704	4	/* 1100MHz */
 				768	5	/* 1200MHz */
+				896	6	/* 1400MHz - estimated */
 			>;
 			idle-cost-data = <
 				0		/* ACTIVE-IDLE */
@@ -251,54 +242,61 @@
 					"core3_clk",
 					"low_freq_clk_parent",
 					"high_freq_clk_parent";
-			clock-latency = <15000>;
+			clock-latency = <30000>;
 			voltage-tolerance = <6413>;
 			volt-share-masters-bits = <0x1>;
 			operating-points = <
 				/* kHz	uV */
-				1200000	1037500
+				1400000 1125000
+                1200000	1037500
 				1100000	987500
 				1000000	943750
 				884000	893750
 				768000	850000>;
 			operating-points-1 = <
 				/* kHz	uV */
-				1200000	981250
+				1400000 1068750
+                1200000	981250
 				1100000	937500
 				1000000	893750
 				884000	850000
 				768000	850000>;
 			operating-points-2 = <
 				/* kHz	uV */
-				1200000	1018750
+				1400000 1106250
+                1200000	1018750
 				1100000	975000
 				1000000	931250
 				884000	881250
 				768000	850000>;
 			operating-points-3 = <
 				/* kHz	uV */
-				1200000	1068750
+				1400000 1156250
+                1200000	1068750
 				1100000	1025000
 				1000000	981250
 				884000	931250
 				768000	881250>;
 			operating-points-1-70 = <
 				/* kHz	uV */
-				1200000	1000000
+				1400000 1087500
+                1200000	1000000
 				1100000	956250
 				1000000	912500
 				884000	868750
 				768000	850000>;
 			operating-points-2-70 = <
 				/* kHz	uV */
-				1200000	1037500
+				1400000 1125000
+                1200000	1037500
 				1100000	993750
 				1000000	950000
 				884000	900000
 				768000	856250>;
 			operating-points-3-70 = <
 				/* kHz	uV */
-				1200000	1081250
+				1400000 1168750
+                1200000	1081250
 				1100000	1037500
 				1000000	993750
 				884000	943750
@@ -323,7 +321,7 @@
 					"core3_clk",
 					"low_freq_clk_parent",
 					"high_freq_clk_parent";
-			clock-latency = <15000>;
+			clock-latency = <30000>;
 			voltage-tolerance = <0>;
 			volt-share-masters-bits = <0xa>;
 			freq-sync-slaves-bits = <0x8>;
@@ -395,7 +393,7 @@
 			clock-names = "clk",
 					"clk_low",
 					"clk_high";
-			clock-latency = <15000>;
+			clock-latency = <30000>;
 			voltage-tolerance = <0>;
 			volt-share-masters-bits = <0xa>;
 			freq-sync-hosts-bits = <0x2>;
@@ -1119,6 +1117,8 @@
 };
 
 &gpu {
+	assigned-clocks = <&pll CLK_GPLL>;
+	assigned-clock-rates = <600000000>;
 	clocks = <&aonapb_gate CLK_GNU_EB>,
 	<&aon_clk CLK_GPU_CORE>,<&aon_clk CLK_GPU_SOC>,
 	<&pll CLK_TWPLL_153M6>, <&pll CLK_TWPLL_192M>,
