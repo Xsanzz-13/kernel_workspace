@@ -16,6 +16,7 @@
 #define DEF_GC_THREAD_NOGC_SLEEP_TIME	300000	/* wait 5 min */
 #define LIMIT_INVALID_BLOCK	40 /* percentage over total user space */
 #define LIMIT_FREE_BLOCK	40 /* percentage over invalid + free space */
+#define F2FS_GC_PREEMPT_SECTIONS 2 /* sections */
 
 #define DEF_GC_FAILED_PINNED_FILES	2048
 
