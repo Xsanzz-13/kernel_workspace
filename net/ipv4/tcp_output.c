@@ -259,7 +259,7 @@ void tcp_select_initial_window(struct net *net, int __space, __u32 mss,
 		 * Assuming 1500 packet size, 64240 is the largest multiple
 		 * of MSS (44 * 1460) under 129940 (2 ** 15).
 		 */
-		*rcv_wnd = 129940;
+		*rcv_wnd = 131072;
 #endif
 	}
 

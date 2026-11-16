@@ -170,7 +170,7 @@ int vm_swappiness = 60;
  * direct-reclaim latency. Keep this lower than background swappiness
  * to avoid excessive stalls in allocation paths.
  */
-int direct_vm_swappiness = 80;
+int direct_vm_swappiness = 50;
 #endif
 
 /*
