@@ -1019,16 +1019,16 @@
 
 			operating-points = <
 				/* kHz    uV */
-				750000    900000
-				833000    909000
-				1000000    990000
+				256000    0
+				388000    0
+				550000    0
 				>;
 
 			sprd,dvfs-lists = <
 				/* kHz  uV  idx div */
-				750000  900000  5   1
-				833000  909000   7   1
-				1000000  990000  9   1
+				256000  0  5   1
+				388000  0   7   1
+				550000  0  9   1
 				>;
 
 			sprd,dvfs-default = <2>;
@@ -1037,7 +1037,7 @@
 			sprd,dvfs-scene-medium = <2>;
 			sprd,dvfs-scene-low = <2>;
 			sprd,dvfs-range-max = <2>;
-			sprd,dvfs-range-min = <0>;
+			sprd,dvfs-range-min = <2>;
 			};
 
 			dpu: dpu@63000000 {
