@@ -192,12 +192,44 @@ jobs:
           fdtoverlay -v -i "$BASE" -o "$MERGED" "$OVERLAY"
           test -s "$MERGED"
 
-          echo "===== VERIFY BOARD ID ====="
-          BOARD_ID="$(fdtget -t x "$MERGED" / sprd,board_id)"
-          echo "Board ID: ${BOARD_ID}"
+          echo "===== READ DVT ROOT METADATA ====="
+          OVL_MODEL="$(fdtget -t s "$OVERLAY" / model)"
+          OVL_SC_ID="$(fdtget -t s "$OVERLAY" / sprd,sc-id)"
+          OVL_BOARD_ID="$(fdtget -t x "$OVERLAY" / sprd,board_id)"
+          OVL_COMPATIBLE="$(fdtget -t s "$OVERLAY" / compatible)"
 
-          if [ "$BOARD_ID" != "1902" ]; then
-            echo "::error::Expected DVT board_id 0x1902, got 0x${BOARD_ID}"
+          if [ "$OVL_BOARD_ID" != "1902" ]; then
+            echo "::error::Expected DVT overlay board_id 0x1902, got 0x${OVL_BOARD_ID}"
+            exit 1
+          fi
+
+          if [ "$OVL_COMPATIBLE" != "sprd,m168 sprd,sc9863a" ]; then
+            echo "::error::Unexpected DVT compatible list: $OVL_COMPATIBLE"
+            exit 1
+          fi
+
+          echo "===== APPLY M168 ROOT METADATA ====="
+          fdtput -t s "$MERGED" / model "$OVL_MODEL"
+          fdtput -t s "$MERGED" / compatible sprd,m168 sprd,sc9863a
+          fdtput -t s "$MERGED" / sprd,sc-id "$OVL_SC_ID"
+          fdtput -t x "$MERGED" / sprd,board_id "$OVL_BOARD_ID"
+
+          echo "===== VERIFY MERGED ROOT IDENTITY ====="
+          MODEL="$(fdtget -t s "$MERGED" / model)"
+          SC_ID="$(fdtget -t s "$MERGED" / sprd,sc-id)"
+          BOARD_ID="$(fdtget -t x "$MERGED" / sprd,board_id)"
+          MERGED_COMPATIBLE="$(fdtget -t s "$MERGED" / compatible)"
+
+          echo "model = ${MODEL}"
+          echo "compatible = ${MERGED_COMPATIBLE}"
+          echo "sprd,sc-id = ${SC_ID}"
+          echo "sprd,board_id = ${BOARD_ID}"
+
+          if [ "$MODEL" != "$OVL_MODEL" ] ||
+             [ "$SC_ID" != "$OVL_SC_ID" ] ||
+             [ "$BOARD_ID" != "1902" ] ||
+             [ "$MERGED_COMPATIBLE" != "$OVL_COMPATIBLE" ]; then
+            echo "::error::Merged M168 root metadata validation failed"
             exit 1
           fi
 
