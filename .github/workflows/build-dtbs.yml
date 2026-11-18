@@ -1,4 +1,4 @@
-name: Build DTBS
+name: Build DTBS + Merged M168 DTB
 
 on:
   workflow_dispatch:
@@ -13,6 +13,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          set -e
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
@@ -40,10 +41,9 @@ jobs:
 
       - name: Setup Toolchain
         run: |
+          set -e
           export PATH="${GITHUB_WORKSPACE}/toolchain/clang-r383902/bin:${GITHUB_WORKSPACE}/toolchain/aarch64-linux-android-4.9/bin:$PATH"
-
           echo "PATH=${PATH}" >> "$GITHUB_ENV"
-
           echo "ARCH=arm64" >> "$GITHUB_ENV"
           echo "SUBARCH=arm64" >> "$GITHUB_ENV"
           echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> "$GITHUB_ENV"
@@ -52,34 +52,30 @@ jobs:
           echo "BSP_BUILD_ANDROID_OS=y" >> "$GITHUB_ENV"
           echo "DTC_OVERLAY_TEST_EXT=${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_apply_overlay" >> "$GITHUB_ENV"
           echo "DTC_OVERLAY_VTS_EXT=${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" >> "$GITHUB_ENV"
-
           clang --version
           gcc --version
 
       - name: Inspect mkdtimg
         run: |
+          set -e
           chmod +x tools/mkdtimg/mkdtimg
-
           echo "===== mkdtimg ====="
           file tools/mkdtimg/mkdtimg
           ldd tools/mkdtimg/mkdtimg || true
-
           echo "===== HELP ====="
           tools/mkdtimg/mkdtimg help 2>&1 || true
-
           echo "===== CREATE USAGE ====="
           tools/mkdtimg/mkdtimg create 2>&1 || true
-
           echo "===== STRINGS ====="
           strings tools/mkdtimg/mkdtimg | \
             grep -iE 'usage|create|build|dtbo|page|entry|id|rev|custom' | \
-            head -100
+            head -100 || true
 
       - name: Verify LibYAML
         run: |
+          set -e
           pkg-config --cflags yaml-0.1
           pkg-config --libs yaml-0.1
-
           cat > /tmp/test_yaml.c <<'EOF'
           #include <yaml.h>
 
@@ -91,12 +87,12 @@ jobs:
               return 0;
           }
           EOF
-
           gcc /tmp/test_yaml.c -lyaml -o /tmp/test_yaml
           /tmp/test_yaml
 
       - name: Prepare Defconfig
         run: |
+          set -e
           make O=out \
             ARCH=arm64 \
             CC=clang \
@@ -106,78 +102,66 @@ jobs:
 
       - name: Fix DTC LibYAML Link
         run: |
+          set -e
           cat >> scripts/dtc/Makefile <<'EOF'
 
           # Fix libyaml linking for old 4.14 Kbuild
           HOSTLOADLIBES_dtc := -lyaml
           EOF
-
           echo "===== DTC MAKEFILE ====="
           tail -n 15 scripts/dtc/Makefile
 
       - name: Set Execute Permission
         run: |
+          set -e
           chmod +x tools/mkdtimg/ufdt_apply_overlay
           chmod +x tools/mkdtimg/ufdt_verify_overlay_host
-
+          chmod +x tools/mkdtimg/mkdtimg
           echo "===== OVERLAY TOOLS ====="
           ls -l tools/mkdtimg/ufdt_apply_overlay
           ls -l tools/mkdtimg/ufdt_verify_overlay_host
+          ls -l tools/mkdtimg/mkdtimg
 
       - name: Fix Overlay Host Tools
         run: |
-          chmod +x tools/mkdtimg/ufdt_apply_overlay
-          chmod +x tools/mkdtimg/ufdt_verify_overlay_host
-
+          set -e
           echo "===== libc++ ====="
           ls -lh /lib/x86_64-linux-gnu/libc++* || true
           ls -lh /usr/lib/x86_64-linux-gnu/libc++* || true
-
           echo "===== ufdt_verify_overlay_host ====="
           file tools/mkdtimg/ufdt_verify_overlay_host
-
           echo "===== NEEDED LIBRARIES ====="
           ldd tools/mkdtimg/ufdt_verify_overlay_host || true
 
       - name: Fix libc++ Runtime
         run: |
           set -e
-
           mkdir -p "${GITHUB_WORKSPACE}/tools/mkdtimg/lib"
-
           echo "===== SYSTEM libc++.so ====="
           ls -lh /usr/lib/llvm-14/lib/libc++.so
           file /usr/lib/llvm-14/lib/libc++.so
-
           echo "===== REAL libc++ RUNTIME ====="
           ls -lh /usr/lib/llvm-14/lib/libc++.so.1.0
           file /usr/lib/llvm-14/lib/libc++.so.1.0
-
-          echo "===== INSTALL LOCAL RUNTIME ====="
           cp -L \
             /usr/lib/llvm-14/lib/libc++.so.1.0 \
             "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/libc++.so"
-
           cp -L \
             /usr/lib/llvm-14/lib/libc++abi.so.1.0 \
             "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/libc++abi.so.1"
-
           chmod 755 "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/libc++.so"
           chmod 755 "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/libc++abi.so.1"
-
           echo "===== LOCAL LIBRARIES ====="
           ls -lh "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/"
           file "${GITHUB_WORKSPACE}/tools/mkdtimg/lib/"*
-
           echo "===== TEST ufdt_verify_overlay_host ====="
           LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/tools/mkdtimg/lib:/usr/lib/llvm-14/lib" \
-            "${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" \
-            2>&1 || true
+            "${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" 2>&1 || true
 
       - name: Build DTBS
         run: |
-          export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/tools/mkdtimg/lib:/usr/lib/llvm-14/lib:${LD_LIBRARY_PATH}"
-
+          set -e
+          export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/tools/mkdtimg/lib:/usr/lib/llvm-14/lib:${LD_LIBRARY_PATH:-}"
           make -j2 V=1 O=out \
             ARCH=arm64 \
             CC=clang \
@@ -192,14 +176,71 @@ jobs:
             DTC_OVERLAY_VTS_EXT="${GITHUB_WORKSPACE}/tools/mkdtimg/ufdt_verify_overlay_host" \
             dtbs
 
+      - name: Merge M168 DVT Overlay Into Main DTB
+        run: |
+          set -euo pipefail
+
+          D="out/arch/arm64/boot/dts/sprd"
+          BASE="${D}/sp9863a.dtb"
+          OVERLAY="${D}/m168-overlay-dvt.dtbo"
+          MERGED="${D}/sp9863a-m168-merged.dtb"
+
+          test -s "$BASE"
+          test -s "$OVERLAY"
+
+          echo "===== MERGE DVT OVERLAY ====="
+          fdtoverlay -v -i "$BASE" -o "$MERGED" "$OVERLAY"
+          test -s "$MERGED"
+
+          echo "===== VERIFY BOARD ID ====="
+          BOARD_ID="$(fdtget -t x "$MERGED" / sprd,board_id)"
+          echo "Board ID: ${BOARD_ID}"
+
+          if [ "$BOARD_ID" != "1902" ]; then
+            echo "::error::Expected DVT board_id 0x1902, got 0x${BOARD_ID}"
+            exit 1
+          fi
+
+          echo "===== VERIFY LCD NODE ====="
+          NODE="/lcds/lcd_nt36525b_txd_mipi_hdp"
+          fdtget "$MERGED" "$NODE" sprd,phy-bit-clock >/dev/null
+          fdtget "$MERGED" "$NODE/display-timings/timing0" clock-frequency >/dev/null
+
+          PHY="$(fdtget -t u "$MERGED" "$NODE" sprd,phy-bit-clock)"
+          PCLK="$(fdtget -t u "$MERGED" "$NODE/display-timings/timing0" clock-frequency)"
+
+          echo "sprd,phy-bit-clock = ${PHY}"
+          echo "clock-frequency = ${PCLK}"
+
+          if [ "$PHY" != "660000" ]; then
+            echo "::error::Unexpected PHY bit clock: ${PHY}"
+            exit 1
+          fi
+
+          if [ "$PCLK" != "96000000" ]; then
+            echo "::error::Unexpected pixel clock: ${PCLK}"
+            exit 1
+          fi
+
+          echo "===== DECOMPILE CHECK ====="
+          dtc -I dtb -O dts "$MERGED" -o /tmp/sp9863a-m168-merged.dts
+
+          grep -q 'lcd_nt36525b_txd_mipi_hdp' \
+            /tmp/sp9863a-m168-merged.dts
+
+          mkdir -p merged_dtb_output
+          cp "$MERGED" merged_dtb_output/sp9863a-m168-merged.dtb
+
+          echo "===== MERGED DTB VALIDATION PASSED ====="
+          ls -lh "$MERGED"
+
       - name: Inspect DTBO Board IDs
         run: |
+          set -e
           echo "===== DTBO BOARD IDS ====="
-
           for f in out/arch/arm64/boot/dts/sprd/m168-overlay*.dtbo; do
             echo
             echo "===== $f ====="
-
             dtc -I dtb -O dts "$f" 2>/dev/null | \
               grep -E 'sprd,board_id|bootargs_ext|compatible' || true
           done
@@ -207,7 +248,6 @@ jobs:
       - name: Prepare DTBO Image
         run: |
           set -e
-
           mkdir -p dtbo_build
 
           # Preserve original DTBO order:
@@ -215,16 +255,12 @@ jobs:
           # 0001 -> board_id 0x1901
           # 0002 -> board_id 0x1900
           # 0003 -> board_id 0x1903
-
           cp out/arch/arm64/boot/dts/sprd/m168-overlay-dvt.dtbo \
             dtbo_build/0000_6402.dtbo
-
           cp out/arch/arm64/boot/dts/sprd/m168-overlay-evt.dtbo \
             dtbo_build/0001_6401.dtbo
-
           cp out/arch/arm64/boot/dts/sprd/m168-overlay-pvt.dtbo \
             dtbo_build/0002_6400.dtbo
-
           cp out/arch/arm64/boot/dts/sprd/m168-overlay.dtbo \
             dtbo_build/0003_6403.dtbo
 
@@ -234,10 +270,7 @@ jobs:
       - name: Create DTBO Image
         run: |
           set -e
-
-          chmod +x tools/mkdtimg/mkdtimg
           mkdir -p dtbo_output
-
           tools/mkdtimg/mkdtimg create \
             dtbo_output/dtbo.img \
             --page_size=2048 \
@@ -261,10 +294,8 @@ jobs:
       - name: Extract And Validate DTBO Entries
         run: |
           set -e
-
           rm -rf dtbo_verify
           mkdir -p dtbo_verify
-
           tools/mkdtimg/mkdtimg dump \
             dtbo_output/dtbo.img \
             -b dtbo_verify/entry
@@ -273,23 +304,24 @@ jobs:
           ls -lh dtbo_verify/
 
           for f in dtbo_verify/entry.*; do
+            test -s "$f"
             echo
             echo "===== $f ====="
             file "$f"
-
             dtc -I dtb -O dts "$f" 2>/dev/null | \
               grep -E 'sprd,board_id|bootargs_ext|compatible|sprd,phy-bit-clock|clock-frequency' || true
           done
-          
+
       - name: Collect DTBS
         run: |
+          set -e
           mkdir -p dtbs_output
-
           find out/arch/arm64/boot/dts \
             -type f \
             \( -name "*.dtb" -o -name "*.dtbo" \) \
             -exec cp --parents {} dtbs_output/ \;
-
+          cp out/arch/arm64/boot/dts/sprd/sp9863a-m168-merged.dtb \
+            dtbs_output/sp9863a-m168-merged.dtb
           echo "===== GENERATED DTBS ====="
           find dtbs_output -type f | sort
 
@@ -298,6 +330,12 @@ jobs:
         with:
           name: DTBS
           path: dtbs_output/
+
+      - name: Upload Merged Main DTB
+        uses: actions/upload-artifact@v4
+        with:
+          name: DTB-M168-MERGED
+          path: merged_dtb_output/sp9863a-m168-merged.dtb
 
       - name: Upload DTBO Image
         uses: actions/upload-artifact@v4
