@@ -244,12 +244,12 @@ jobs:
           echo "sprd,phy-bit-clock = ${PHY}"
           echo "clock-frequency = ${PCLK}"
 
-          if [ "$PHY" != "660000" ]; then
+          if [ "$PHY" != "734000" ]; then
             echo "::error::Unexpected PHY bit clock: ${PHY}"
             exit 1
           fi
 
-          if [ "$PCLK" != "96000000" ]; then
+          if [ "$PCLK" != "106768788" ]; then
             echo "::error::Unexpected pixel clock: ${PCLK}"
             exit 1
           fi
