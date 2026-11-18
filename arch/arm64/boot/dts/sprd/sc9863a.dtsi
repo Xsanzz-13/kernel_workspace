@@ -108,7 +108,6 @@
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
 			capacity-dmips-mhz = <1088>;
-			sugov_slack_timer;
 		};
 
 		CPU5: cpu@500 {
@@ -121,7 +120,6 @@
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
 			capacity-dmips-mhz = <1088>;
-			sugov_slack_timer;
 		};
 
 		CPU6: cpu@600 {
@@ -215,9 +213,9 @@
 		entry-method = "arm,psci";
 		CORE_PD: core_pd {
 			compatible = "arm,idle-state";
-			entry-latency-us = <800>;
-			exit-latency-us = <250>;
-			min-residency-us = <2000>;
+			entry-latency-us = <600>;
+			exit-latency-us = <200>;
+			min-residency-us = <1500>;
 			local-timer-stop;
 			arm,psci-suspend-param = <0x00010000>;
 		};
