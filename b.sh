@@ -70,8 +70,8 @@ echo "[+] Melakukan konfigurasi kernel dengan $DEFCONFIG..."
 make -C $KERNEL_ROOT O=$KERNEL_ROOT/out ARCH=$ARCH CC=$CC LD=ld.lld $DEFCONFIG
 
 echo "[+] Memulai kompilasi Kernel Image..."
-export KBUILD_BUILD_USER="Xsanzz"
-export KBUILD_BUILD_HOST="A03Core"
+export KBUILD_BUILD_USER="KONTOL"
+export KBUILD_BUILD_HOST="GODOG"
 export KBUILD_BUILD_TIMESTAMP="$(date '+%a %b %d %T WIB %Y')"
 
 # Tambahan Flags Optimasi CPU (Cortex-A55) & Linker
@@ -93,7 +93,7 @@ make -C $KERNEL_ROOT O=$KERNEL_ROOT/out -j$(nproc) ARCH=$ARCH \
     NM=llvm-nm \
     KCFLAGS="$KCFLAGS" \
     KBUILD_LDFLAGS="$KBUILD_LDFLAGS" \
-    Image
+    Image Image.gz
 
 # ==========================================
 # BUILD KERNEL MODULES
@@ -125,8 +125,8 @@ OUT="$KERNEL_ROOT/out"
 ART="$GITHUB_WORKSPACE/output_artifacts"
 
 # Kernel utama
-if [ -f "$OUT/arch/arm64/boot/Image" ]; then
-    cp "$OUT/arch/arm64/boot/Image" "$ART/"
+if [ -f "$OUT/arch/arm64/boot/Image Image.gz" ]; then
+    cp "$OUT/arch/arm64/boot/Image Image.gz" "$ART/"
     echo "[+] Image"
 fi
 
