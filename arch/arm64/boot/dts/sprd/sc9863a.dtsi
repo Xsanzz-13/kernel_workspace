@@ -58,7 +58,6 @@
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 			capacity-dmips-mhz = <1024>;
-			sugov_slack_timer;
 		};
 
 		CPU1: cpu@100 {
@@ -71,7 +70,6 @@
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 			capacity-dmips-mhz = <1024>;
-			sugov_slack_timer;
 		};
 
 		CPU2: cpu@200 {
@@ -225,7 +223,7 @@
 			cpufreq-cluster-id = <0>;
 			nvmem-cells = <&dvfs_bin_cpu0>;
 			nvmem-cell-names = "dvfs_bin";
-			sprd,cpufreq-temp-threshold = <70>;
+			sprd,cpufreq-temp-threshold = <80>;
 			clocks = <&aon_clk CLK_CORE0>,
 				<&aon_clk CLK_CORE1>,
 				<&aon_clk CLK_CORE2>,
@@ -269,21 +267,21 @@
 				1000000	981250
 				884000	931250
 				768000	881250>;
-			operating-points-1-70 = <
+			operating-points-1-80 = <
 				/* kHz	uV */
 				1200000	1000000
 				1100000	956250
 				1000000	912500
 				884000	868750
 				768000	850000>;
-			operating-points-2-70 = <
+			operating-points-2-80 = <
 				/* kHz	uV */
 				1200000	1037500
 				1100000	993750
 				1000000	950000
 				884000	900000
 				768000	856250>;
-			operating-points-3-70 = <
+			operating-points-3-80 = <
 				/* kHz	uV */
 				1200000	1081250
 				1100000	1037500
@@ -296,7 +294,7 @@
 			cpufreq-cluster-id = <1>;
 			nvmem-cells = <&dvfs_bin_cpu1>;
 			nvmem-cell-names = "dvfs_bin";
-			sprd,cpufreq-temp-threshold = <70>;
+			sprd,cpufreq-temp-threshold = <80>;
 			cpufreq-sub-clusters = <&cpufreq_fcm>;
 			clocks = <&aon_clk CLK_CORE4>,
 				<&aon_clk CLK_CORE5>,
@@ -346,7 +344,7 @@
 				1225000	962500
 				1050000	906250
 				768000	862500>;
-			operating-points-1-70 = <
+			operating-points-1-80 = <
 				/* kHz	uV */
 				1700000	1062500
 				1500000	1000000
@@ -354,7 +352,7 @@
 				1225000	906250
 				1050000	862500
 				768000	862500>;
-			operating-points-2-70 = <
+			operating-points-2-80 = <
 				/* kHz	uV */
 				1700000	1100000
 				1500000	1025000
@@ -362,9 +360,10 @@
 				1225000	937500
 				1050000	887500
 				768000	862500>;
-			operating-points-3-70 = <
+			operating-points-3-80 = <
 				/* kHz	uV */
 				1700000	1137500
+                1500000	1025000
 				1400000	1025000
 				1225000	975000
 				1050000	918750
@@ -375,7 +374,7 @@
 			cpufreq-cluster-id = <3>;
 			nvmem-cells = <&dvfs_bin_dsu>;
 			nvmem-cell-names = "dvfs_bin";
-			sprd,cpufreq-temp-threshold = <70>;
+			sprd,cpufreq-temp-threshold = <80>;
 			clocks = <&aon_clk CLK_SCU>,
 				<&pll CLK_TWPLL_768M>,
 				<&mpll CLK_MPLL2>;
@@ -418,7 +417,7 @@
 				959000	975000
 				824000	918750
 				768000	875000>;
-			operating-points-1-70 = <
+			operating-points-1-80 = <
 				/* kHz	uV */
 				1250000	1018750
 				1172000	987500
@@ -426,7 +425,7 @@
 				959000	906250
 				824000	862500
 				768000	862500>;
-			operating-points-2-70 = <
+			operating-points-2-80 = <
 				/* kHz	uV */
 				1250000	1050000
 				1172000	1018750
@@ -434,7 +433,7 @@
 				959000	937500
 				824000	887500
 				768000	862500>;
-			operating-points-3-70 = <
+			operating-points-3-80 = <
 				/* kHz	uV */
 				1250000	1100000
 				1172000	1068750
@@ -472,7 +471,7 @@
 		compatible = "sprd,power-debug-sharkl3";
 
 		sprd,enable = <1>;
-		sprd,scan-interval = <30>;
+		sprd,scan-interval = <150>;
 
 		sprd,sys-ap-ahb = <&ap_ahb_regs>;
 		sprd,sys-ap-apb = <&ap_apb_regs>;
