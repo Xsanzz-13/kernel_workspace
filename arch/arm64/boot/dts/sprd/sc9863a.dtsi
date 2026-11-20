@@ -57,7 +57,7 @@
 			cpufreq-data-v1 = <&cpufreq_clus0>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
-			capacity-dmips-mhz = <1024>;
+			capacity-dmips-mhz = <1050>;
 		};
 
 		CPU1: cpu@100 {
@@ -69,7 +69,7 @@
 			cpufreq-data-v1 = <&cpufreq_clus0>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
-			capacity-dmips-mhz = <1024>;
+			capacity-dmips-mhz = <1050>;
 		};
 
 		CPU2: cpu@200 {
@@ -81,7 +81,7 @@
 			cpufreq-data-v1 = <&cpufreq_clus0>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
-			capacity-dmips-mhz = <1024>;
+			capacity-dmips-mhz = <1050>;
 		};
 
 		CPU3: cpu@300 {
@@ -93,7 +93,7 @@
 			cpufreq-data-v1 = <&cpufreq_clus0>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
-			capacity-dmips-mhz = <1024>;
+			capacity-dmips-mhz = <1050>;
 		};
 
 		CPU4: cpu@400 {
@@ -105,7 +105,7 @@
 			cpufreq-data-v1 = <&cpufreq_clus1>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
-			capacity-dmips-mhz = <1088>;
+			capacity-dmips-mhz = <1096>;
 		};
 
 		CPU5: cpu@500 {
@@ -117,7 +117,7 @@
 			cpufreq-data-v1 = <&cpufreq_clus1>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
-			capacity-dmips-mhz = <1088>;
+			capacity-dmips-mhz = <1096>;
 		};
 
 		CPU6: cpu@600 {
@@ -129,7 +129,7 @@
 			cpufreq-data-v1 = <&cpufreq_clus1>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
-			capacity-dmips-mhz = <1088>;
+			capacity-dmips-mhz = <1096>;
 		};
 
 		CPU7: cpu@700 {
@@ -141,7 +141,7 @@
 			cpufreq-data-v1 = <&cpufreq_clus1>;
 			cpu-idle-states = <&CORE_PD>;
 			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
-			capacity-dmips-mhz = <1088>;
+			capacity-dmips-mhz = <1096>;
 		};
 	};
 
@@ -164,10 +164,10 @@
 			busy-cost-data = <
 				492	88	/* 768MHz */
 				672	130	/* 1050MHz */
-				784	168	/* 1225MHz */
+				876	186	/* 1300MHz */
 				896	212	/* 1400MHz */
 				960	250	/* 1500MHz */
-				1088	310	/* 1700MHz */
+				1088 384 /* 1750MHz */
 			>;
 			idle-cost-data = <
 				35		/* ACTIVE-IDLE */
@@ -193,10 +193,10 @@
 			busy-cost-data = <
 				492	52	/* 768MHz */
 				672	68	/* 1050MHz */
-				784	85	/* 1225MHz */
-				896	105	/* 1400MHz */
-				960	123	/* 1500MHz */
-				1088	155	/* 1700MHz */
+				876	90	/* 1300MHz */
+				896	105 /* 1400MHz */
+				960 123	/* 1500MHz */
+				1088 188 /* 1750MHz */
 			>;
 			idle-cost-data = <
 				32		/* ACTIVE-IDLE */
@@ -314,58 +314,58 @@
 			freq-sync-slaves-bits = <0x8>;
 			operating-points = <
 				/* kHz	uV */
-				1700000	1087500
+				1750000	1087500
 				1500000	1025000
 				1400000	987500
-				1225000	937500
+				1300000	937500
 				1050000	887500
 				768000	862500>;
 			operating-points-1 = <
 				/* kHz	uV */
-				1700000	1037500
+				1750000	1037500
 				1500000	975000
 				1400000	937500
-				1225000	887500
+				1300000	887500
 				1050000	862500
 				768000	862500>;
 			operating-points-2 = <
 				/* kHz	uV */
-				1700000	1075000
+				1750000	1075000
 				1500000	1012500
 				1400000	975000
-				1225000	925000
+				1300000	925000
 				1050000	868750
 				768000	862500>;
 			operating-points-3 = <
 				/* kHz	uV */
-				1700000	1125000
+				1750000	1125000
 				1500000	1050000
 				1400000	1012500
-				1225000	962500
+				1300000	962500
 				1050000	906250
 				768000	862500>;
 			operating-points-1-80 = <
 				/* kHz	uV */
-				1700000	1062500
+				1750000	1062500
 				1500000	1000000
 				1400000	962500
-				1225000	906250
+				1300000	906250
 				1050000	862500
 				768000	862500>;
 			operating-points-2-80 = <
 				/* kHz	uV */
-				1700000	1100000
+				1750000	1100000
 				1500000	1025000
 				1400000	987500
-				1225000	937500
+				1300000	937500
 				1050000	887500
 				768000	862500>;
 			operating-points-3-80 = <
 				/* kHz	uV */
-				1700000	1137500
+				1750000	1137500
                 1500000	1025000
 				1400000	1025000
-				1225000	975000
+				1300000	975000
 				1050000	918750
 				768000	862500>;
 	};
@@ -470,7 +470,7 @@
 	power: power-debug {
 		compatible = "sprd,power-debug-sharkl3";
 
-		sprd,enable = <1>;
+		sprd,enable = <0>;
 		sprd,scan-interval = <150>;
 
 		sprd,sys-ap-ahb = <&ap_ahb_regs>;
