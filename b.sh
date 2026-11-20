@@ -124,11 +124,23 @@ mkdir -p "$GITHUB_WORKSPACE/output_artifacts"
 OUT="$KERNEL_ROOT/out"
 ART="$GITHUB_WORKSPACE/output_artifacts"
 
+
 # Kernel utama
-if [ -f "$OUT/arch/arm64/boot/Image Image.gz" ]; then
-    cp "$OUT/arch/arm64/boot/Image Image.gz" "$ART/"
-    echo "[+] Image"
-fi
+IMAGE_DIR="$OUT/arch/arm64/boot"
+
+echo "[+] Memeriksa kernel Image..."
+
+for image in Image Image.gz; do
+    SRC="$IMAGE_DIR/$image"
+
+    if [ -s "$SRC" ]; then
+        cp -v "$SRC" "$ART/$image"
+        echo "[+] Berhasil export: $image"
+    else
+        echo "[!] ERROR: $image tidak ditemukan atau kosong!"
+        exit 1
+    fi
+done
 
 # Kernel config
 if [ -f "$OUT/.config" ]; then
